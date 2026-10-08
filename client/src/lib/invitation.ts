@@ -1,4 +1,4 @@
-// "Copy Invitation" text, in Zoom's format (PLAN.MD section 5, "Invitation text").
+// "Copy Invitation" text, in Zoom's format.
 // No "One tap mobile" or dial-in sections: there is no phone dial-in.
 import { format } from "date-fns";
 import { formatMeetingNumber } from "./format";
@@ -21,7 +21,7 @@ export function timeZoneName(date: Date, style: "short" | "long"): string {
 }
 
 /** "Oct 9, 2026 10:00 AM PDT" in the browser's time zone. */
-export function formatInvitationTime(iso: string): string {
+function formatInvitationTime(iso: string): string {
   const start = new Date(iso);
   return `${format(start, "MMM d, yyyy h:mm a")} ${timeZoneName(start, "short")}`;
 }

@@ -6,21 +6,18 @@ import { Spinner } from "./Spinner";
  * soft: light-blue pill with blue text ("Manage Plan" / "Test Audio and Video").
  * secondary: surface colour with a hairline border (Cancel in dialogs).
  */
-export type ButtonVariant = "primary" | "soft" | "secondary" | "ghost" | "danger";
-export type ButtonSize = "sm" | "md" | "lg";
+type ButtonVariant = "primary" | "soft" | "secondary";
+type ButtonSize = "sm" | "md";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "rounded-lg bg-zoom-blue text-white hover:bg-zoom-blue-hover",
   soft: "rounded-xl bg-zoom-blue-soft text-zoom-blue hover:bg-zoom-blue-soft-hover dark:text-zoom-blue-hover",
   secondary: "rounded-lg border border-line bg-surface text-ink hover:bg-surface-muted",
-  ghost: "rounded-lg text-ink hover:bg-surface-muted",
-  danger: "rounded-lg bg-zoom-danger text-white hover:bg-zoom-danger-hover",
 };
 
 const sizes: Record<ButtonSize, string> = {
   sm: "h-9 gap-1.5 px-4 text-sm",
   md: "h-10 gap-2 px-5 text-[15px]",
-  lg: "h-12 gap-2 px-6 text-base",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

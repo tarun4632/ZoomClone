@@ -51,7 +51,7 @@ export function ParticipantsPanel({ meetingNumber, isHost, me, onClose, onNotice
   const [error, setError] = useState<string | null>(null);
   const errorTimer = useRef<number | null>(null);
 
-  // Me first, then hosts, then everyone else by name.
+  // Me first, then the host, then everyone else by name.
   const sorted = [...participants].sort((a, b) => {
     if (a.isLocal !== b.isLocal) return a.isLocal ? -1 : 1;
     const hostA = parseRole(a.metadata) === "host";
@@ -179,7 +179,7 @@ function ParticipantRow({ participant, viewerIsHost, onMute, onMakeHost, onRemov
   const displayName = participantName(name, participant);
   const isHost = parseRole(metadata) === "host";
   const suffix = roleSuffix(isHost, participant.isLocal);
-  // Make Host / Remove: never on your own row, never on another host's row (e.g. the host's second tab).
+  // Make Host / Remove: the host sees them on everyone else's row.
   const manageable = viewerIsHost && !participant.isLocal && !isHost;
   // A host mutes anyone else by clicking their microphone icon. It only ever mutes: once the
   // mic is off the icon is not a button any more, and only that person can unmute themselves.

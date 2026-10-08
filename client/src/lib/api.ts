@@ -14,7 +14,7 @@ import type {
   User,
 } from "./types";
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 /** Non-2xx response. `status` lets callers branch on 401 / 403 / 404 / 410. */
 export class ApiError extends Error {

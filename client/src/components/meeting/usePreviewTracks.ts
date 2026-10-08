@@ -10,7 +10,7 @@ import {
 import { useRealUnmount } from "./hooks";
 
 /**
- * Pre-join camera and mic preview (PLAN.MD "Mic and camera on/off"):
+ * Pre-join camera and mic preview:
  * - camera off stops and releases the video track (light off); camera on creates a new one
  * - mic off mutes the audio track (device stays open); mic on unmutes it
  * Tracks are stopped on unmount unless they were handed off to the room.

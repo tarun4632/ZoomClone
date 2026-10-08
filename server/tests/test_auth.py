@@ -189,7 +189,7 @@ def test_migrate_upgrades_a_database_from_before_accounts(tmp_path):
     migrate(old)
     migrate(old)  # idempotent
 
-    columns = lambda table: {c["name"] for c in inspect(old).get_columns(table)}  # noqa: E731
+    columns = lambda table: {c["name"] for c in inspect(old).get_columns(table)}
     assert "host_key" not in columns("meetings")
     assert "invite_token" in columns("meetings")
     assert "password_hash" in columns("users")

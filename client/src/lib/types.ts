@@ -2,8 +2,8 @@
 // All datetimes are ISO 8601 strings with a UTC offset (e.g. "2026-10-08T09:30:00Z").
 // meeting_number is always the bare 11 digits ("12345678901"); format it for display.
 
-export type MeetingType = "instant" | "scheduled";
-export type MeetingStatus = "scheduled" | "live" | "ended";
+type MeetingType = "instant" | "scheduled";
+type MeetingStatus = "scheduled" | "live" | "ended";
 export type Role = "host" | "attendee";
 
 export interface User {

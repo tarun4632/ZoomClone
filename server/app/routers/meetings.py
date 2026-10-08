@@ -117,7 +117,7 @@ async def join_meeting(
     for earlier in superseded:
         try:
             await lk.set_participant_role(meeting.id, earlier.identity, "attendee")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if not is_not_found(exc):
                 log.warning("could not clear host metadata for %s: %r", earlier.identity, exc)
     return response
@@ -162,7 +162,7 @@ async def sync_participants(
     svc.require_own_participant(db, meeting, me.identity, me.participant_secret)
     try:
         present = await lk.participant_roles(meeting.id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if is_not_found(exc):  # no room: nothing to compare against
             return Response(status_code=status.HTTP_204_NO_CONTENT)
         raise _livekit_unavailable(exc) from exc
@@ -171,7 +171,7 @@ async def sync_participants(
         # As in leave: the row is the authority, the metadata drives labels and controls.
         try:
             await lk.set_participant_role(meeting.id, participant.identity, participant.role)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("could not set role metadata for %s: %r", participant.identity, exc)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -187,7 +187,7 @@ async def end_meeting(
     svc.require_host_participant(db, meeting, me)
     try:
         await lk.end_room(meeting.id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # No room (nobody connected) is fine. Any other failure is a 502 and nothing changes:
         # marking it ended while people are still connected would lock out anyone rejoining.
         if not is_not_found(exc):
@@ -206,9 +206,8 @@ async def mute_all(
     meeting = svc.get_meeting_or_404(db, number)
     svc.require_host_participant(db, meeting, me)
     try:
-        # Skips every joined row whose current role is host (including the caller).
         await lk.mute_all(meeting.id, svc.host_identities(db, meeting))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not is_not_found(exc):  # no room means nobody to mute
             raise _livekit_unavailable(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -231,7 +230,7 @@ async def mute_participant(
     svc.get_participant_or_404(db, meeting, target)
     try:
         await lk.mute_participant_audio(meeting.id, target)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not is_not_found(exc):  # not in the room means nothing to mute
             raise _livekit_unavailable(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -256,7 +255,7 @@ async def remove_participant(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "A host can't be removed")
     try:
         await lk.remove_participant(meeting.id, target)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not is_not_found(exc):  # already gone from the room is fine
             raise _livekit_unavailable(exc) from exc
     svc.mark_removed(db, participant, utcnow())
@@ -285,17 +284,17 @@ async def make_host(
     # the authority for host actions, and metadata only drives the "(Host)" label.
     try:
         await lk.set_participant_role(meeting.id, new_host.identity, "host")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not is_not_found(exc):
             raise _livekit_unavailable(exc) from exc
     try:
         await lk.set_participant_role(meeting.id, caller.identity, "attendee")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not is_not_found(exc):
             # Best-effort undo of the target's metadata so LiveKit matches the database.
             try:
                 await lk.set_participant_role(meeting.id, new_host.identity, "attendee")
-            except Exception as undo_exc:  # noqa: BLE001
+            except Exception as undo_exc:
                 log.warning("could not undo role metadata for %s: %r", new_host.identity, undo_exc)
             raise _livekit_unavailable(exc) from exc
 

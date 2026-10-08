@@ -25,12 +25,12 @@ class UTCDateTime(TypeDecorator):
     impl = DateTime
     cache_ok = True
 
-    def process_bind_param(self, value, dialect):  # noqa: ANN001, ANN201
+    def process_bind_param(self, value, dialect):
         if value is None:
             return None
         return as_utc(value).replace(tzinfo=None)
 
-    def process_result_value(self, value, dialect):  # noqa: ANN001, ANN201
+    def process_result_value(self, value, dialect):
         if value is None:
             return None
         return value.replace(tzinfo=UTC)

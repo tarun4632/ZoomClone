@@ -4,7 +4,7 @@
 
 export type Theme = "light" | "dark";
 
-export const THEME_STORAGE_KEY = "zc:theme";
+const THEME_STORAGE_KEY = "zc:theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 /**
@@ -20,7 +20,7 @@ export const themeInitScript = `(function(){var t=null;try{t=localStorage.getIte
 const isTheme = (value: unknown): value is Theme => value === "light" || value === "dark";
 
 /** The saved explicit choice, or null when the user hasn't picked one (or storage is blocked). */
-export function getSavedTheme(): Theme | null {
+function getSavedTheme(): Theme | null {
   try {
     const value = window.localStorage.getItem(THEME_STORAGE_KEY);
     return isTheme(value) ? value : null;
@@ -29,7 +29,7 @@ export function getSavedTheme(): Theme | null {
   }
 }
 
-export function getSystemTheme(): Theme {
+function getSystemTheme(): Theme {
   try {
     return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
   } catch {

@@ -126,4 +126,4 @@ The client is built for Vercel (root directory `client`) and the server for Rail
 - **Instant meetings can be opened by anyone with the link** before their owner arrives (scheduled ones cannot). Nobody is host until the owner joins.
 - **Not built:** chat, screen share, waiting room, recordings, editing or cancelling a scheduled meeting.
 
-`PLAN.MD` is the original design document. Its first section lists what has changed since it was written.
+`PLAN.MD` describes the design in depth: schema, rules, API and the reasoning behind them.

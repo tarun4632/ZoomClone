@@ -527,7 +527,7 @@ def mark_removed(db: Session, participant: MeetingParticipant, now: datetime) ->
 
 
 def host_identities(db: Session, meeting: Meeting) -> set[str]:
-    """Every joined host row (covers a host with two tabs open)."""
+    """Who is host right now. Normally exactly one identity."""
     return set(
         db.scalars(
             select(MeetingParticipant.identity).where(
@@ -557,7 +557,7 @@ async def cleanup_stale_meetings(db: Session, lk: LiveKitService, now: datetime)
         return 0
     try:
         active = await asyncio.wait_for(lk.active_room_names(), LIST_ROOMS_TIMEOUT_SECONDS + 1)
-    except Exception as exc:  # noqa: BLE001 - never break the dashboard over LiveKit
+    except Exception as exc:  # never break the dashboard over LiveKit
         log.warning("stale-meeting cleanup skipped: LiveKit list_rooms failed: %r", exc)
         return 0
     ended = 0

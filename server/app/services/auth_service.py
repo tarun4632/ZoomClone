@@ -40,7 +40,7 @@ def hash_password(password: str) -> str:
     """ "scrypt$n$r$p$salt$hash" with base64 salt and hash; the parameters travel with the hash."""
     salt = secrets.token_bytes(16)
     digest = _scrypt(password, salt, SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_KEY_LENGTH)
-    encode = lambda raw: base64.b64encode(raw).decode()  # noqa: E731
+    encode = lambda raw: base64.b64encode(raw).decode()
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${encode(salt)}${encode(digest)}"
 
 

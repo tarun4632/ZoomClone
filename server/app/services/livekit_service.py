@@ -1,7 +1,7 @@
 """The only module that talks to LiveKit.
 
 Routes get the service through the `get_livekit` dependency, so tests can override it
-with a fake. Names checked against livekit-api 1.2.1.
+with a fake.
 """
 
 import asyncio

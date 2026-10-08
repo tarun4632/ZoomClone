@@ -70,7 +70,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     window.removeEventListener("pagehide", sendBeacon);
   }, [sendBeacon]);
 
-  // Tab close / reload: tell the server we left (PLAN.MD section 4, "Meeting lifecycle").
+  // Tab close / reload: tell the server we left.
   useEffect(() => {
     window.addEventListener("pagehide", sendBeacon);
     return () => window.removeEventListener("pagehide", sendBeacon);

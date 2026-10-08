@@ -15,18 +15,18 @@ os.environ["LIVEKIT_URL"] = "wss://fake.livekit.test"
 os.environ["LIVEKIT_API_KEY"] = "testkey"
 os.environ["LIVEKIT_API_SECRET"] = "testsecret-testsecret-testsecret-testsecret"
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from app.database import Base, SessionLocal, engine  # noqa: E402
-from app.main import app  # noqa: E402
-from app.models import Meeting  # noqa: E402
-from app.seed import DEFAULT_USER_EMAIL, DEMO_PASSWORD, default_user  # noqa: E402
-from app.services.ids import (  # noqa: E402
+from app.database import Base, SessionLocal, engine
+from app.main import app
+from app.models import Meeting
+from app.seed import DEFAULT_USER_EMAIL, DEMO_PASSWORD, default_user
+from app.services.ids import (
     generate_invite_token,
     generate_meeting_number,
     generate_passcode,
 )
-from app.services.livekit_service import get_livekit  # noqa: E402
+from app.services.livekit_service import get_livekit
 
 
 class FakeLiveKit:
@@ -130,7 +130,7 @@ def db():
 
 
 def insert_meeting(db, **fields) -> Meeting:
-    """Insert a meeting for the default user directly (e.g. with past times)."""
+    """Insert a meeting for the demo user directly (e.g. with past times)."""
     user = default_user(db)
     values = dict(
         id=str(uuid.uuid4()),
@@ -153,6 +153,6 @@ def parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ANN001
+def pytest_sessionfinish(session, exitstatus) -> None:
     engine.dispose()
     shutil.rmtree(_TMP_DIR, ignore_errors=True)

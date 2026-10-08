@@ -26,7 +26,7 @@ def _make_engine(url: str) -> Engine:
     if eng.dialect.name == "sqlite":
 
         @event.listens_for(eng, "connect")
-        def _sqlite_pragmas(dbapi_connection, _record) -> None:  # noqa: ANN001
+        def _sqlite_pragmas(dbapi_connection, _record) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
@@ -73,7 +73,7 @@ def migrate(bind: Engine) -> None:
             )
 
 
-def _columns(conn, table: str) -> set[str]:  # noqa: ANN001
+def _columns(conn, table: str) -> set[str]:
     return {c["name"] for c in inspect(conn).get_columns(table)}
 
 

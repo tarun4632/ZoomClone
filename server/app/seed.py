@@ -127,7 +127,7 @@ def seed_once(db: Session) -> bool:
         [("Priya Sharma", None), ("Marcus Lee", None)],
         "Plan the next two-week sprint.",
     )
-    # Hosted by another user; the default user attended (user_id set on the attendee row).
+    # Hosted by another user; the demo user attended (user_id set on the attendee row).
     ended_meeting(
         priya, "Marketing Sync", "scheduled", 2, 11, 30,
         [("Alex Johnson", alex), ("Jordan Kim", None)],
@@ -139,7 +139,7 @@ def seed_once(db: Session) -> bool:
         [("Marcus Lee", None)],
         "Dry run of the client demo.",
     )
-    # Not involving the default user, so it must not appear in their Recent list.
+    # Not involving the demo user, so it must not appear in their Recent list.
     ended_meeting(marcus, "Infra Office Hours", "instant", 4, 10, 40, [("Jordan Kim", None)])
 
     log.info("seeded demo users and past meetings")

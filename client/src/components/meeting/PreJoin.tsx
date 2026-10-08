@@ -110,7 +110,6 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
       onJoined({
         join: response,
         hostName: meeting.host_name,
-        displayName: trimmedName,
         ...tracks,
       });
     } catch (err) {
