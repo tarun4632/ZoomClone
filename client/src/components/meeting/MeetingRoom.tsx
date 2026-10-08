@@ -11,10 +11,18 @@ import {
   useParticipantInfo,
   useParticipants,
 } from "@livekit/components-react";
-import { DisconnectReason, Room, RoomEvent, type LocalParticipant, type RemoteParticipant } from "livekit-client";
+import {
+  DisconnectReason,
+  LogLevel,
+  Room,
+  RoomEvent,
+  setLogLevel,
+  type LocalParticipant,
+  type RemoteParticipant,
+} from "livekit-client";
 import type { ParticipantCredentials } from "@/lib/types";
 import { LoaderCircle, VolumeX } from "lucide-react";
-import { api, leaveUrl } from "@/lib/api";
+import { api, leaveBody, leaveUrl } from "@/lib/api";
 import { DisconnectedScreen, type DisconnectKind } from "./DisconnectedScreen";
 import { useRealUnmount } from "./hooks";
 import { LeaveMenu } from "./LeaveMenu";
@@ -24,6 +32,13 @@ import { ParticipantsPanel } from "./ParticipantsPanel";
 import { Toolbar } from "./Toolbar";
 import type { MeetingSession } from "./types";
 import { VideoGrid } from "./VideoGrid";
+
+// LiveKit logs its own diagnostics at "info" ("publishing track", "final track stats", ...).
+// Nothing here reads them, so keep the browser console to warnings and errors.
+setLogLevel(LogLevel.warn);
+
+/** How often to ask the server for a host while the call has none (see the sync effect). */
+const NO_HOST_CHECK_MS = 10_000;
 
 interface MeetingRoomProps {
   meetingNumber: string;
@@ -39,6 +54,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
   const [ended, setEnded] = useState<DisconnectKind | null>(null);
 
   const identity = session.join.identity;
+  const secret = session.join.participant_secret;
   const connectStartedRef = useRef(false); // Strict Mode guard: connect once
   const leavingRef = useRef(false); // set for a client-initiated leave / end
   const leftRef = useRef(false); // the leave request has been sent
@@ -47,8 +63,8 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     // LiveKit also disconnects on pagehide; treat that as our own leave.
     leavingRef.current = true;
     leftRef.current = true;
-    navigator.sendBeacon(leaveUrl(meetingNumber, identity));
-  }, [meetingNumber, identity]);
+    navigator.sendBeacon(leaveUrl(meetingNumber, identity), leaveBody(secret));
+  }, [meetingNumber, identity, secret]);
 
   const stopPageHide = useCallback(() => {
     window.removeEventListener("pagehide", sendBeacon);
@@ -78,7 +94,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
       } else {
         if (!leftRef.current) {
           leftRef.current = true;
-          void api.leave(meetingNumber, identity).catch(() => {});
+          void api.leave(meetingNumber, credentials(session)).catch(() => {});
         }
         setEnded("disconnected");
       }
@@ -87,7 +103,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     return () => {
       room.off(RoomEvent.Disconnected, onDisconnected);
     };
-  }, [room, session, meetingNumber, identity, stopPageHide]);
+  }, [room, session, meetingNumber, stopPageHide]);
 
   // Connect, then publish the pre-join tracks (audio is already muted if the mic was off).
   useEffect(() => {
@@ -102,7 +118,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
         stopPageHide();
         if (!leftRef.current) {
           leftRef.current = true;
-          void api.leave(meetingNumber, identity).catch(() => {});
+          void api.leave(meetingNumber, credentials(session)).catch(() => {});
         }
         setEnded((current) => current ?? "failed");
         return;
@@ -116,7 +132,49 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
       // Enable the toolbar only after publishing, so a quick click can't open a second mic/camera.
       setConnected(true);
     })();
-  }, [room, session, meetingNumber, identity, stopPageHide]);
+  }, [room, session, meetingNumber, stopPageHide]);
+
+  // A browser that crashes or loses its network sends no leave, so the server would keep
+  // that person as "in the meeting" and, if they were the host, as host. LiveKit does notice
+  // them go, so the people still here ask the server to re-check:
+  // - when a host drops out (the quick path);
+  // - after a reconnect (we may have been written off ourselves);
+  // - every few seconds for as long as nobody in the call is shown as host. That covers a
+  //   host who vanished before we arrived, and one the server would not write off yet
+  //   because they had only just joined.
+  // The server decides who the new host is; the role arrives through LiveKit metadata.
+  useEffect(() => {
+    if (!connected) return;
+    let timer: number | null = null;
+    const requestSync = () => {
+      if (timer !== null) return;
+      // Everyone in the call sees the same event; a short random delay spreads the requests
+      // out and lets a normal leave (which already hands the role on) land first.
+      timer = window.setTimeout(
+        () => {
+          timer = null;
+          void api.syncParticipants(meetingNumber, credentials(session)).catch(() => {});
+        },
+        500 + Math.random() * 1500,
+      );
+    };
+    const onParticipantLeft = (participant: RemoteParticipant) => {
+      if (parseRole(participant.metadata) === "host") requestSync();
+    };
+    const checkForHost = () => {
+      const everyone = [room.localParticipant, ...room.remoteParticipants.values()];
+      if (!everyone.some((p) => parseRole(p.metadata) === "host")) requestSync();
+    };
+    const hostCheck = window.setInterval(checkForHost, NO_HOST_CHECK_MS);
+    room.on(RoomEvent.ParticipantDisconnected, onParticipantLeft);
+    room.on(RoomEvent.Reconnected, requestSync);
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      window.clearInterval(hostCheck);
+      room.off(RoomEvent.ParticipantDisconnected, onParticipantLeft);
+      room.off(RoomEvent.Reconnected, requestSync);
+    };
+  }, [connected, room, session, meetingNumber]);
 
   // Real unmount (e.g. browser back): disconnect, release devices, send leave.
   useRealUnmount(() => {
@@ -127,7 +185,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     session.videoTrack?.stop();
     if (!leftRef.current) {
       leftRef.current = true;
-      void api.leave(meetingNumber, identity).catch(() => {});
+      void api.leave(meetingNumber, credentials(session)).catch(() => {});
     }
   });
 
@@ -137,10 +195,10 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     await room.disconnect(true);
     if (!leftRef.current) {
       leftRef.current = true;
-      await api.leave(meetingNumber, identity).catch(() => {});
+      await api.leave(meetingNumber, credentials(session)).catch(() => {});
     }
     router.push("/");
-  }, [room, meetingNumber, identity, router, stopPageHide]);
+  }, [room, meetingNumber, session, router, stopPageHide]);
 
   if (ended) return <DisconnectedScreen kind={ended} />;
 
@@ -284,7 +342,7 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
   );
 }
 
-/** Own credentials for in-meeting host actions. The secret stays in memory (the session). */
+/** Own credentials, for leaving and for host actions. The secret stays in memory (the session). */
 function credentials(session: MeetingSession): ParticipantCredentials {
   return { identity: session.join.identity, participant_secret: session.join.participant_secret };
 }

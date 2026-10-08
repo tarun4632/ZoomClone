@@ -5,7 +5,7 @@
 export interface ParsedMeetingInput {
   /** Bare 11 digits. */
   number: string;
-  /** Passcode from the link's ?pwd=, or null. */
+  /** The invite token from the link's ?pwd=, or null. */
   pwd: string | null;
 }
 

@@ -34,8 +34,8 @@ export function MeetingDetails({ onStart }: { onStart: (meeting: MeetingOwner) =
     return notFound ? (
       <StateCard
         icon={<SearchX className="size-6" aria-hidden="true" />}
-        title="Invalid meeting ID"
-        detail="This meeting doesn't exist. Check the meeting ID or link and try again."
+        title="Meeting not found"
+        detail="This meeting doesn't exist, or it isn't one of your meetings."
         action={
           <Link
             href="/"
@@ -151,7 +151,7 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
                 </>
               )}
             </Button>
-            {meeting.host_key && (
+            {meeting.is_host && (
               <Button onClick={() => onStart(meeting)} className="min-w-28">
                 {meeting.status === "live" ? (
                   <LogIn className="size-4" aria-hidden="true" />

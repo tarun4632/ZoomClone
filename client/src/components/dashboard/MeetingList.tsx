@@ -177,7 +177,7 @@ export function UpcomingList({
                   )
                 }
                 action={
-                  m.host_key && (
+                  m.is_host && (
                     // A live meeting is joined, not started (as in Zoom). Same action: enter as host.
                     <Button
                       variant="soft"

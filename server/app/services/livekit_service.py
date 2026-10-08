@@ -4,6 +4,7 @@ Routes get the service through the `get_livekit` dependency, so tests can overri
 with a fake. Names checked against livekit-api 1.2.1.
 """
 
+import asyncio
 import json
 import logging
 from datetime import timedelta
@@ -24,6 +25,14 @@ DEFAULT_TIMEOUT_SECONDS = 10.0
 def role_metadata(role: str) -> str:
     """Participant metadata clients read to show "(Host)". Same shape in tokens and updates."""
     return json.dumps({"role": role})
+
+
+def _metadata_role(metadata: str | None) -> str | None:
+    try:
+        role = json.loads(metadata or "").get("role")
+    except (ValueError, AttributeError):
+        return None
+    return role if isinstance(role, str) else None
 
 
 def is_not_found(exc: BaseException) -> bool:
@@ -52,14 +61,10 @@ class LiveKitService:
             .with_name(name)
             # Other clients read this to show "(Host)" in the participants panel.
             .with_metadata(role_metadata("host" if is_host else "attendee"))
+            # No room_admin, even for hosts: every host action goes through this server,
+            # which checks the current role. An admin grant would outlive a role change.
             .with_grants(
-                api.VideoGrants(
-                    room_join=True,
-                    room=room,
-                    room_admin=is_host,
-                    can_publish=True,
-                    can_subscribe=True,
-                )
+                api.VideoGrants(room_join=True, room=room, can_publish=True, can_subscribe=True)
             )
             .with_ttl(TOKEN_TTL)
             .to_jwt()
@@ -69,16 +74,20 @@ class LiveKitService:
         """Force-mute every published audio track except those of host identities."""
         async with self._client() as lk:
             res = await lk.room.list_participants(api.ListParticipantsRequest(room=room))
-            for p in res.participants:
-                if p.identity in host_identities:
-                    continue
-                for t in p.tracks:
-                    if t.type == api.TrackType.AUDIO and not t.muted:
-                        await lk.room.mute_published_track(
-                            api.MuteRoomTrackRequest(
-                                room=room, identity=p.identity, track_sid=t.sid, muted=True
-                            )
+            # All at once: one slow call must not hold up muting everyone else.
+            await asyncio.gather(
+                *(
+                    lk.room.mute_published_track(
+                        api.MuteRoomTrackRequest(
+                            room=room, identity=p.identity, track_sid=t.sid, muted=True
                         )
+                    )
+                    for p in res.participants
+                    if p.identity not in host_identities
+                    for t in p.tracks
+                    if t.type == api.TrackType.AUDIO and not t.muted
+                )
+            )
 
     async def mute_participant_audio(self, room: str, identity: str) -> None:
         """Force-mute one participant's published audio tracks. Never unmutes."""
@@ -102,6 +111,19 @@ class LiveKitService:
                     room=room, identity=identity, metadata=role_metadata(role)
                 )
             )
+
+    async def participant_identities(self, room: str) -> set[str]:
+        """Identities connected to the room right now."""
+        async with self._client() as lk:
+            res = await lk.room.list_participants(api.ListParticipantsRequest(room=room))
+            return {p.identity for p in res.participants}
+
+    async def participant_roles(self, room: str) -> dict[str, str | None]:
+        """Everyone connected to the room right now, with the role in their metadata
+        (None if the metadata carries no role)."""
+        async with self._client() as lk:
+            res = await lk.room.list_participants(api.ListParticipantsRequest(room=room))
+            return {p.identity: _metadata_role(p.metadata) for p in res.participants}
 
     async def remove_participant(self, room: str, identity: str) -> None:
         async with self._client() as lk:

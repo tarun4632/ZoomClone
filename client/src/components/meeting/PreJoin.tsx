@@ -6,7 +6,8 @@ import type { LocalVideoTrack } from "livekit-client";
 import { CircleAlert, LoaderCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { initials } from "@/lib/format";
-import { getDisplayName, getHostKey, saveDisplayName } from "@/lib/session";
+import { getToken } from "@/lib/auth";
+import { getDisplayName, saveDisplayName } from "@/lib/session";
 import type { MeetingPublic } from "@/lib/types";
 import { StatusScreen } from "./StatusScreen";
 import { usePreviewTracks } from "./usePreviewTracks";
@@ -17,10 +18,11 @@ type LoadState =
   | { kind: "invalid" }
   | { kind: "ended" }
   | { kind: "error" }
-  | { kind: "ready"; meeting: MeetingPublic; hostKey: string | null };
+  | { kind: "ready"; meeting: MeetingPublic };
 
 interface PreJoinProps {
   number: string;
+  /** The invite link's ?pwd= token (random, not the passcode), or null. */
   pwd: string | null;
   onJoined: (session: MeetingSession) => void;
 }
@@ -49,20 +51,21 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
         return;
       }
       if (cancelled) return;
-      // sessionStorage is only read on the client, after mount.
-      const hostKey = getHostKey(number);
+      // `is_host`: the request carried the sign-in of this meeting's host (see api.ts).
+      const isHost = meeting.is_host;
       // An ended instant meeting can only be restarted by the host. Scheduled meetings may
       // still be restartable inside their window; the server decides that on join (410).
-      if (meeting.status === "ended" && meeting.meeting_type === "instant" && !hostKey) {
+      if (meeting.status === "ended" && meeting.meeting_type === "instant" && !isHost) {
         setLoad({ kind: "ended" });
         return;
       }
-      setLoad({ kind: "ready", meeting, hostKey });
-      setAskPasscode(!pwd && !hostKey);
-      start(hostKey ? meeting.host_video_on : meeting.participant_video_on);
+      setLoad({ kind: "ready", meeting });
+      setAskPasscode(!pwd && !isHost);
+      start(isHost ? meeting.host_video_on : meeting.participant_video_on);
 
+      // The name typed in the Join modal, else a signed-in user's own name; guests type one.
       let initialName = getDisplayName() ?? "";
-      if (!initialName && hostKey) {
+      if (!initialName && getToken()) {
         try {
           initialName = (await api.me()).name;
         } catch {
@@ -110,7 +113,7 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
       />
     );
 
-  const { meeting, hostKey } = load;
+  const { meeting } = load;
   const trimmedName = name.trim();
   const mediaPending = preview.cameraPending || preview.micPending;
   const canJoin = trimmedName !== "" && (!askPasscode || passcode.trim() !== "") && !joining && !mediaPending;
@@ -121,13 +124,16 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
     setJoining(true);
     setError(null);
     try {
-      // The host key skips the passcode. The passcode field only appears without a key,
-      // or after a 403 (then the typed passcode is sent instead).
+      // The signed-in host needs no passcode. Others send the invite link's token; the
+      // passcode field only appears without a link, or after a 403 (then the typed passcode
+      // is sent instead).
       const response = await api.join(
         number,
-        hostKey && !askPasscode
-          ? { display_name: trimmedName, host_key: hostKey }
-          : { display_name: trimmedName, passcode: askPasscode ? passcode.trim() : (pwd ?? "") },
+        askPasscode
+          ? { display_name: trimmedName, passcode: passcode.trim() }
+          : meeting.is_host
+            ? { display_name: trimmedName }
+            : { display_name: trimmedName, invite_token: pwd ?? "" },
       );
       saveDisplayName(trimmedName);
       const tracks = preview.handOff();
@@ -140,8 +146,10 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
     } catch (err) {
       setJoining(false);
       if (err instanceof ApiError && err.status === 403) {
+        // A typed passcode was wrong; or the link's token was not accepted (an old or
+        // mistyped link), in which case the passcode still gets the user in.
+        setError(askPasscode ? "Incorrect passcode" : "This invite link isn't valid. Enter the meeting passcode.");
         setAskPasscode(true);
-        setError("Incorrect passcode");
       } else if (err instanceof ApiError && err.status === 410) {
         preview.release();
         setLoad({ kind: "ended" });

@@ -3,9 +3,9 @@
 import { CalendarDays, Plus, Video, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Avatar } from "@/components/ui/Avatar";
 import { Spinner } from "@/components/ui/Spinner";
 import type { User } from "@/lib/types";
+import { AccountMenu } from "./AccountMenu";
 import { ThemeToggle } from "./ThemeToggle";
 import type { MeetingActions } from "./useMeetingActions";
 
@@ -58,7 +58,7 @@ export function Navbar({ me, actions }: { me: User | null; actions: MeetingActio
 
         <div className="ml-1 flex shrink-0 items-center gap-1 md:ml-4 md:gap-3">
           <ThemeToggle />
-          <Avatar name={me?.name ?? null} color={me?.avatar_color} />
+          <AccountMenu me={me} />
         </div>
       </div>
     </header>

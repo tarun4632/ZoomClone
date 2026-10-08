@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -39,21 +40,41 @@ engine = _make_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-# create_all() never adds columns to existing tables. Each entry is added once, if missing,
-# so databases created by an older version keep working. (table, column, SQL type)
+# create_all() never changes existing tables. Each entry below is applied once, if needed,
+# so databases created by an older version keep working.
+# (table, column, SQL type)
 _ADDED_COLUMNS = [
     ("meeting_participants", "secret_hash", "TEXT"),
+    ("users", "password_hash", "TEXT"),
+    ("meetings", "invite_token", "TEXT"),
+]
+# (table, column). host_key: replaced by accounts; the host is the signed-in owner.
+_DROPPED_COLUMNS = [
+    ("meetings", "host_key"),
 ]
 
 
 def migrate(bind: Engine) -> None:
     """Idempotent schema evolution. Run right after Base.metadata.create_all()."""
-    insp = inspect(bind)
     with bind.begin() as conn:
         for table, column, sql_type in _ADDED_COLUMNS:
-            existing = {c["name"] for c in insp.get_columns(table)}
-            if column not in existing:
+            if column not in _columns(conn, table):
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
+        for table, column in _DROPPED_COLUMNS:
+            if column in _columns(conn, table):
+                conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+
+        # Meetings created before invite tokens existed: give each its own random token.
+        missing = conn.execute(text("SELECT id FROM meetings WHERE invite_token IS NULL")).all()
+        for (meeting_id,) in missing:
+            conn.execute(
+                text("UPDATE meetings SET invite_token = :token WHERE id = :id"),
+                {"token": secrets.token_urlsafe(24), "id": meeting_id},
+            )
+
+
+def _columns(conn, table: str) -> set[str]:  # noqa: ANN001
+    return {c["name"] for c in inspect(conn).get_columns(table)}
 
 
 def get_db() -> Iterator[Session]:

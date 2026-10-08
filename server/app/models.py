@@ -43,9 +43,29 @@ class User(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     avatar_color: Mapped[str | None] = mapped_column(Text)
+    # "scrypt$n$r$p$salt$hash" (see services/auth_service.py). NULL means the account can't sign in.
+    password_hash: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )
+
+
+class AuthToken(Base):
+    """One row per sign-in. The bearer token is returned once; only its SHA-256 is stored."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
+    )
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+
+    user: Mapped[User] = relationship(lazy="joined")
 
 
 class Meeting(Base):
@@ -75,7 +95,8 @@ class Meeting(Base):
     scheduled_start_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     duration_minutes: Mapped[int | None] = mapped_column(Integer)
     passcode: Mapped[str] = mapped_column(Text, nullable=False)
-    host_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # Random; the ?pwd= value of the invite link. Lets a link holder in without showing the passcode.
+    invite_token: Mapped[str] = mapped_column(Text, nullable=False)
     host_video_on: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("1")
     )
@@ -102,7 +123,7 @@ class Meeting(Base):
 
 
 class MeetingParticipant(Base):
-    """One row per join. user_id is set for host joins; NULL means a guest."""
+    """One row per join. user_id is the signed-in user who joined; NULL means a guest."""
 
     __tablename__ = "meeting_participants"
     __table_args__ = (
@@ -121,11 +142,11 @@ class MeetingParticipant(Base):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     # Random UUID; the LiveKit identity.
     identity: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    # Current role. Can move during the meeting (Make Host).
+    # Current role. Can move during the meeting (Make Host, or the last host leaving).
     role: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     # SHA-256 hex of the participant secret returned once by /join. It proves "I am this
-    # participant" for in-meeting host actions. NULL for seeded history rows.
+    # participant" for leave and for in-meeting host actions. NULL for seeded history rows.
     secret_hash: Mapped[str | None] = mapped_column(Text)
     joined_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()

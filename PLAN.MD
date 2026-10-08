@@ -1,5 +1,24 @@
 # Zoom Clone: implementation plan
 
+## 0. Changes since this plan
+
+The rest of this document is the original plan. These decisions have since replaced parts of it; where they disagree, this section and the code are right.
+
+- **Accounts replace the host key.** Users sign up and sign in (`/auth/signup`, `/auth/login`, `/auth/logout`) and send a bearer token. The dashboard routes need it. The host of a meeting is the signed-in user who owns it, so `host_key` is gone from the database, the API and `sessionStorage`. Guests still join by invite link or meeting ID and passcode, without an account.
+  - Passwords are scrypt hashes. Tokens are random, stored as SHA-256 hashes, last 30 days and are revoked on sign-out.
+  - The seeded demo user signs in with a public demo password; only that account gets the demo "Upcoming" top-up.
+  - `GET /meetings/{number}` reports `is_host` for the caller. `/details` answers only for the host or a signed-in attendee.
+- **Sign-in screens and account menu follow Zoom's.** `/login` has Zoom's layout (top bar that switches between Sign In and Sign Up, illustrated panel, one short form; sign-up is email first, then name and password). The navbar avatar opens Zoom's menu with only what exists here: Profile (read-only), Settings (light/dark) and Sign out. Left out because nothing is behind them: birth year, SSO and social sign-in, Support, language, plans and billing, help, switch account, the upgrade card.
+- **The invite link no longer contains the passcode.** `?pwd=` is a random per-meeting `invite_token`. `/join` accepts `passcode` (typed) or `invite_token` (from the link).
+- **Leave is authenticated.** The leave request carries the participant's own `participant_secret` as a form-encoded body, which `sendBeacon` can still send without a CORS preflight. Before, anyone who could see an identity could make that participant "leave".
+- **Host succession.** When the last host leaves and others remain, the participant who has been in the meeting longest becomes host (preferring someone LiveKit reports as connected).
+  - **A host who vanishes** (crash, lost network) sends no leave. `POST /meetings/{number}/sync`, called by the clients still in the room when a host drops out or no host is visible, compares the participant rows with LiveKit's list: missing people are marked left, a successor is promoted, and role metadata that disagrees with the database is corrected.
+- **End meeting** returns 502 and changes nothing if LiveKit cannot delete the room.
+- **LiveKit tokens** no longer carry `room_admin`; every host action goes through the server.
+- **Tests:** 21 (meetings, leave authorization, host succession, vanished hosts, accounts, database upgrade).
+
+---
+
 ## 1. Scope
 
 **Build:**

@@ -3,6 +3,7 @@
 Datetimes always go out timezone-aware in UTC (pydantic renders them as "...Z").
 """
 
+import re
 from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
@@ -20,6 +21,9 @@ Role = Literal["host", "attendee"]
 # time it arrives; allow a small grace before calling it "in the past".
 START_AT_GRACE = timedelta(minutes=5)
 MAX_DURATION_MINUTES = 24 * 60
+MIN_PASSWORD_LENGTH = 8
+# Deliberately loose: something@something.tld. Real proof of an address would be a mail to it.
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class UserOut(BaseModel):
@@ -31,6 +35,51 @@ class UserOut(BaseModel):
     avatar_color: str | None
 
 
+def _normalize_email(v: object) -> object:
+    return v.strip().lower() if isinstance(v, str) else v
+
+
+class SignupInput(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lower_email(cls, v: object) -> object:
+        return _normalize_email(v)
+
+    @field_validator("email")
+    @classmethod
+    def _looks_like_email(cls, v: str) -> str:
+        if not EMAIL_PATTERN.match(v):
+            raise ValueError("Enter a valid email address")
+        return v
+
+
+class LoginInput(BaseModel):
+    email: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lower_email(cls, v: object) -> object:
+        return _normalize_email(v)
+
+
+class AuthOut(BaseModel):
+    """Sign-up / sign-in result. Send the token back as `Authorization: Bearer <token>`."""
+
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    user: UserOut
+
+
 class MeetingPublic(BaseModel):
     meeting_number: str
     title: str
@@ -39,6 +88,8 @@ class MeetingPublic(BaseModel):
     status: MeetingStatus
     host_video_on: bool
     participant_video_on: bool
+    # True when the request carries the bearer token of this meeting's host.
+    is_host: bool
 
 
 class MeetingOwner(MeetingPublic):
@@ -49,9 +100,7 @@ class MeetingOwner(MeetingPublic):
     ended_at: UTCDatetime | None
     created_at: UTCDatetime
     passcode: str
-    host_key: str | None
     invite_url: str
-    is_host: bool
 
 
 class ScheduleMeetingInput(BaseModel):
@@ -85,16 +134,20 @@ class ScheduleMeetingInput(BaseModel):
 
 
 class JoinInput(BaseModel):
+    """The meeting's host (by bearer token) needs neither; anyone else sends one of the two."""
+
     display_name: str = Field(min_length=1, max_length=64)
-    passcode: str | None = None
-    host_key: str | None = None
+    # Typed by hand.
+    passcode: str | None = Field(default=None, max_length=64)
+    # The ?pwd= value of an invite link.
+    invite_token: str | None = Field(default=None, max_length=128)
 
     @field_validator("display_name", mode="before")
     @classmethod
     def _strip_name(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
 
-    @field_validator("passcode", "host_key", mode="before")
+    @field_validator("passcode", "invite_token", mode="before")
     @classmethod
     def _blank_is_none(cls, v: object) -> object:
         if isinstance(v, str):
@@ -112,7 +165,7 @@ class JoinResponse(BaseModel):
     title: str
     passcode: str
     invite_url: str
-    # Private to this participant; proves identity for in-meeting host actions.
+    # Private to this participant; proves identity for leave and in-meeting host actions.
     participant_secret: str
 
 

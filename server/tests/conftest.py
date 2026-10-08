@@ -20,8 +20,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Meeting  # noqa: E402
-from app.seed import default_user  # noqa: E402
-from app.services.ids import generate_host_key, generate_meeting_number, generate_passcode  # noqa: E402
+from app.seed import DEFAULT_USER_EMAIL, DEMO_PASSWORD, default_user  # noqa: E402
+from app.services.ids import (  # noqa: E402
+    generate_invite_token,
+    generate_meeting_number,
+    generate_passcode,
+)
 from app.services.livekit_service import get_livekit  # noqa: E402
 
 
@@ -30,6 +34,8 @@ class FakeLiveKit:
 
     def __init__(self) -> None:
         self.rooms: dict[str, set[str]] = {}
+        # identity -> role in its LiveKit metadata (from the token, then from role updates).
+        self.roles: dict[str, str] = {}
         self.muted: set[str] = set()
         self.mute_calls: list[tuple[str, set[str]]] = []
         self.removed: list[tuple[str, str]] = []
@@ -38,9 +44,13 @@ class FakeLiveKit:
         self.role_updates: list[tuple[str, str, str]] = []
         # Set to an exception to make set_participant_role fail for that identity.
         self.fail_role_update_for: dict[str, Exception] = {}
+        # Set to an exception to make end_room / participant_identities fail.
+        self.fail_end_room: Exception | None = None
+        self.fail_list_participants: Exception | None = None
 
     def create_token(self, room: str, identity: str, name: str, is_host: bool) -> str:
         self.rooms.setdefault(room, set()).add(identity)
+        self.roles[identity] = "host" if is_host else "attendee"
         return f"fake-token:{room}:{identity}:{'host' if is_host else 'attendee'}"
 
     async def mute_all(self, room: str, host_identities: set[str]) -> None:
@@ -57,12 +67,23 @@ class FakeLiveKit:
         if identity in self.fail_role_update_for:
             raise self.fail_role_update_for[identity]
         self.role_updates.append((room, identity, role))
+        self.roles[identity] = role
 
     async def remove_participant(self, room: str, identity: str) -> None:
         self.removed.append((room, identity))
         self.rooms.get(room, set()).discard(identity)
 
+    async def participant_identities(self, room: str) -> set[str]:
+        if self.fail_list_participants is not None:
+            raise self.fail_list_participants
+        return set(self.rooms.get(room, set()))
+
+    async def participant_roles(self, room: str) -> dict[str, str | None]:
+        return {i: self.roles.get(i) for i in await self.participant_identities(room)}
+
     async def end_room(self, room: str) -> None:
+        if self.fail_end_room is not None:
+            raise self.fail_end_room
         self.ended_rooms.append(room)
         self.rooms.pop(room, None)
 
@@ -75,14 +96,31 @@ def fake_lk() -> FakeLiveKit:
     return FakeLiveKit()
 
 
+def sign_in(client: TestClient, email: str, password: str) -> dict:
+    """Sign in and make every later request of this client carry the bearer token."""
+    res = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    client.headers["Authorization"] = f"Bearer {body['access_token']}"
+    return body
+
+
 @pytest.fixture
 def client(fake_lk: FakeLiveKit):
+    """Signed in as the seeded demo user (Alex Johnson)."""
     # Fresh schema per test; the app's lifespan re-creates tables and seeds.
     Base.metadata.drop_all(bind=engine)
     app.dependency_overrides[get_livekit] = lambda: fake_lk
     with TestClient(app) as c:
+        sign_in(c, DEFAULT_USER_EMAIL, DEMO_PASSWORD)
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def guest(client: TestClient) -> TestClient:
+    """Not signed in: someone who only has an invite link or a meeting ID and passcode."""
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -105,7 +143,7 @@ def insert_meeting(db, **fields) -> Meeting:
         meeting_type="scheduled",
         status="scheduled",
         passcode=generate_passcode(),
-        host_key=generate_host_key(),
+        invite_token=generate_invite_token(),
     )
     values.update(fields)
     meeting = Meeting(**values)

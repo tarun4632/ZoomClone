@@ -13,8 +13,14 @@ def generate_passcode() -> str:
     return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
 
 
-def generate_host_key() -> str:
-    return secrets.token_urlsafe(16)
+def generate_invite_token() -> str:
+    """The ?pwd= value of the invite link. Random, so it reveals nothing about the passcode."""
+    return secrets.token_urlsafe(24)
+
+
+def generate_auth_token() -> str:
+    """Bearer token returned once by sign-up / sign-in; only its hash is stored."""
+    return secrets.token_urlsafe(32)
 
 
 def generate_participant_secret() -> str:

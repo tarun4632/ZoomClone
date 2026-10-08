@@ -13,6 +13,26 @@ export interface User {
   avatar_color: string | null;
 }
 
+/** POST /auth/signup */
+export interface SignupInput {
+  name: string;
+  email: string;
+  password: string;
+}
+
+/** POST /auth/login */
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+/** Sign-up / sign-in result. `access_token` goes back as `Authorization: Bearer <token>`. */
+export interface AuthResponse {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
+}
+
 /** Public info, safe for anyone with the meeting number. GET /meetings/{number} */
 export interface MeetingPublic {
   meeting_number: string;
@@ -22,12 +42,14 @@ export interface MeetingPublic {
   status: MeetingStatus;
   host_video_on: boolean;
   participant_video_on: boolean;
+  /** True when the request was made by the signed-in host of this meeting. */
+  is_host: boolean;
 }
 
 /**
- * Owner view. Returned by GET /meetings (list items), GET /meetings/{number}/details,
- * POST /meetings/instant and POST /meetings.
- * host_key is null for meetings the default user attended but did not host (seeded Recent rows).
+ * Owner view, for signed-in users. Returned by GET /meetings (list items),
+ * GET /meetings/{number}/details, POST /meetings/instant and POST /meetings.
+ * `is_host` is false for meetings the user attended but did not host (they appear in Recent).
  */
 export interface MeetingOwner extends MeetingPublic {
   description: string | null;
@@ -37,9 +59,8 @@ export interface MeetingOwner extends MeetingPublic {
   ended_at: string | null;
   created_at: string;
   passcode: string;
-  host_key: string | null;
+  /** `{origin}/j/{meeting_number}?pwd={invite token}`. The token is random, not the passcode. */
   invite_url: string;
-  is_host: boolean;
 }
 
 export type MeetingScope = "upcoming" | "recent";
@@ -54,11 +75,14 @@ export interface ScheduleMeetingInput {
   participant_video_on: boolean;
 }
 
-/** POST /meetings/{number}/join. Send host_key OR passcode. */
+/**
+ * POST /meetings/{number}/join. The meeting's signed-in host needs only a name. Anyone else
+ * sends the passcode (typed) or the invite link's ?pwd= token.
+ */
 export interface JoinInput {
   display_name: string;
   passcode?: string;
-  host_key?: string;
+  invite_token?: string;
 }
 
 export interface JoinResponse {
@@ -72,15 +96,16 @@ export interface JoinResponse {
   passcode: string;
   invite_url: string;
   /**
-   * Private to this participant. Proves "I am this participant" for in-meeting host actions.
+   * Private to this participant. Proves "I am this participant" for leave and host actions.
    * Never share it: unlike `identity`, it is not visible to other people in the room.
    */
   participant_secret: string;
 }
 
 /**
- * Credentials for in-meeting host actions (end, mute all, mute one, remove, make host).
- * The server allows the action only if this participant's current role is "host".
+ * The caller's own identity + secret from the join response. Needed to leave, and for the
+ * host actions (end, mute all, mute one, remove, make host), which the server allows only
+ * while this participant's current role is "host".
  */
 export interface ParticipantCredentials {
   identity: string;
@@ -89,7 +114,7 @@ export interface ParticipantCredentials {
 
 /**
  * LiveKit participant metadata. The server writes it into the token at join and
- * updates it live when the host role moves (Make Host).
+ * updates it live when the host role moves (Make Host, or the last host leaving).
  */
 export interface ParticipantMetadata {
   role: Role;

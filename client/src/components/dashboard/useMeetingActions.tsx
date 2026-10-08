@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useLayoutEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { saveHostKey } from "@/lib/session";
 import type { MeetingOwner, User } from "@/lib/types";
 import { JoinMeetingModal } from "./JoinMeetingModal";
 import { ScheduleMeetingModal } from "./ScheduleMeetingModal";
@@ -36,10 +35,12 @@ export function useMeetingActions({
     };
   }, []);
 
-  /** Saves the host key (never put in a URL), then opens the meeting in this tab. */
+  /**
+   * Opens the user's own meeting in this tab. Nothing extra goes in the URL: the server
+   * recognises the host by their sign-in.
+   */
   const startAsHost = useCallback(
     (meeting: MeetingOwner) => {
-      if (meeting.host_key) saveHostKey(meeting.meeting_number, meeting.host_key);
       router.push(`/wc/${meeting.meeting_number}`);
     },
     [router],

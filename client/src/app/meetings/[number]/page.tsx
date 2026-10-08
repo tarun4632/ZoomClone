@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useResource } from "@/components/dashboard/hooks";
 import { Navbar } from "@/components/dashboard/Navbar";
 import { useMeetingActions } from "@/components/dashboard/useMeetingActions";
@@ -11,6 +12,14 @@ import { DetailsSkeleton, MeetingDetails } from "./MeetingDetails";
 const fetchMe = () => api.me();
 
 export default function MeetingDetailsPage() {
+  return (
+    <RequireAuth>
+      <MeetingDetailsScreen />
+    </RequireAuth>
+  );
+}
+
+function MeetingDetailsScreen() {
   const [meResource] = useResource(fetchMe);
   const me = meResource.status === "ready" ? meResource.data : null;
   // The navbar's Schedule / Join / New Meeting links work here too.

@@ -2,9 +2,11 @@
 
 - seed_once: users plus ended meetings (for Recent), only when the database is empty.
   Past data never goes stale.
-- top_up_upcoming: keeps the default user at >= 3 scheduled meetings whose window is still
-  ahead. Runs on startup and before GET /meetings?scope=upcoming, so Upcoming stays filled
-  even if the service runs for weeks.
+- ensure_demo_passwords: lets the demo users sign in with DEMO_PASSWORD, also on a database
+  seeded before accounts existed.
+- top_up_upcoming: keeps the demo user at >= 3 scheduled meetings whose window is still
+  ahead. Runs on startup and before the demo user's GET /meetings?scope=upcoming, so
+  Upcoming stays filled even if the service runs for weeks. Other accounts get no demo data.
 """
 
 import logging
@@ -16,13 +18,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Meeting, MeetingParticipant, User
-from .services import meeting_service
-from .services.ids import generate_host_key, generate_passcode
+from .services import auth_service, meeting_service
+from .services.ids import generate_invite_token, generate_passcode
 from .timeutil import utcnow
 
 log = logging.getLogger(__name__)
 
 DEFAULT_USER_EMAIL = "alex.johnson@example.com"
+# Public on purpose: the demo account is how a visitor tries the app without signing up.
+# The sign-in page offers it as "Use the demo account" (client/src/lib/auth.ts).
+DEMO_PASSWORD = "zoomclone-demo"
 UPCOMING_TARGET = 3
 
 USERS = [
@@ -103,7 +108,7 @@ def seed_once(db: Session) -> bool:
                 scheduled_start_at=start if meeting_type == "scheduled" else None,
                 duration_minutes=minutes if meeting_type == "scheduled" else None,
                 passcode=generate_passcode(),
-                host_key=generate_host_key(),
+                invite_token=generate_invite_token(),
                 started_at=started,
                 ended_at=ended,
                 created_at=start - timedelta(days=2) if meeting_type == "scheduled" else started,
@@ -139,6 +144,21 @@ def seed_once(db: Session) -> bool:
 
     log.info("seeded demo users and past meetings")
     return True
+
+
+def ensure_demo_passwords(db: Session) -> int:
+    """Give every demo user without a password DEMO_PASSWORD. Returns how many were set."""
+    emails = [email for _, email, _ in USERS]
+    users = list(
+        db.scalars(select(User).where(User.email.in_(emails), User.password_hash.is_(None)))
+    )
+    if users:
+        # One hash for all of them: hashing is slow on purpose, and the password is public.
+        password_hash = auth_service.hash_password(DEMO_PASSWORD)
+        for user in users:
+            user.password_hash = password_hash
+        db.commit()
+    return len(users)
 
 
 def top_up_upcoming(db: Session, user: User, now: datetime | None = None) -> int:
@@ -177,7 +197,7 @@ def top_up_upcoming(db: Session, user: User, now: datetime | None = None) -> int
                 scheduled_start_at=start,
                 duration_minutes=slot.duration_minutes,
                 passcode=generate_passcode(),
-                host_key=generate_host_key(),
+                invite_token=generate_invite_token(),
             )
 
         meeting_service.save_new_meeting(db, build)
@@ -194,6 +214,7 @@ def default_user(db: Session) -> User | None:
 
 def run_startup_seed(db: Session) -> None:
     seed_once(db)
+    ensure_demo_passwords(db)
     user = default_user(db)
     if user is not None:
         top_up_upcoming(db, user)

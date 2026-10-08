@@ -25,7 +25,7 @@ function Clock() {
   );
 }
 
-/** The signed-in (default) user, with the live clock and today's date on the right. */
+/** The signed-in user, with the live clock and today's date on the right. */
 export function ProfileCard({
   me,
   onRetry,

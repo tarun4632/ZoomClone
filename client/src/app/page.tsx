@@ -1,5 +1,6 @@
 "use client";
 
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ActionCard } from "@/components/dashboard/ActionCard";
 import { useResource } from "@/components/dashboard/hooks";
 import { RecentList, UpcomingList } from "@/components/dashboard/MeetingList";
@@ -14,6 +15,14 @@ const fetchUpcoming = () => api.listMeetings("upcoming");
 const fetchRecent = () => api.listMeetings("recent");
 
 export default function DashboardPage() {
+  return (
+    <RequireAuth>
+      <Dashboard />
+    </RequireAuth>
+  );
+}
+
+function Dashboard() {
   const [meResource, reloadMe] = useResource(fetchMe);
   const [upcoming, reloadUpcoming] = useResource(fetchUpcoming);
   const [recent, reloadRecent] = useResource(fetchRecent);
