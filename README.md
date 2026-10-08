@@ -25,7 +25,7 @@ A browser video-meeting app modelled on Zoom: sign in, start an instant meeting,
 
 ## Run it locally
 
-You need Python 3.14, Node.js 20 or newer, and a free [LiveKit Cloud](https://cloud.livekit.io) project.
+You need Python 3.14, Node.js 24, and a free [LiveKit Cloud](https://cloud.livekit.io) project.
 
 **1. Server**
 
@@ -85,6 +85,8 @@ npx tsc --noEmit && npm run lint && npm run build
 ```
 
 The client has no unit tests. It is checked by the type checker, the linter, the production build, and by hand in the browser.
+
+Both sets of checks run on GitHub for every push to `main` and every pull request (`.github/workflows/ci.yml`). They report on a commit; they do not hold back a deploy.
 
 ## How access works
 

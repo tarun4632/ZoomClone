@@ -1,0 +1,68 @@
+# Checks every push to main and every pull request: the server's tests, and the client's
+# type check, lint and production build. The same commands are in the README under "Tests".
+#
+# This reports whether a commit is healthy; it does not hold back a deploy by itself. Vercel
+# and Railway deploy from the same push. Railway can be told to wait for it (service
+# Settings -> "Wait for CI"); for Vercel, protect main and merge through pull requests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch or pull request replaces a run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          # The version Railway runs.
+          python-version-file: server/.python-version
+          cache: pip
+          cache-dependency-path: server/requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      # No LiveKit keys or database needed: conftest.py uses a fake LiveKit and a temp SQLite file.
+      - name: Run tests
+        run: pytest
+
+  client:
+    name: Client type check, lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Keep on the major version used for development. Its npm (11) wrote
+          # package-lock.json; npm 10 (Node 22) reads the optional WebAssembly packages in
+          # it differently and makes `npm ci` reject the file.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      # Also proves every page prerenders. NEXT_PUBLIC_API_URL falls back to localhost, which
+      # is fine here: the build never calls the API.
+      - name: Build
+        run: npm run build
