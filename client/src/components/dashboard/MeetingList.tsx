@@ -1,7 +1,7 @@
 "use client";
 
 import { addDays, format, isBefore } from "date-fns";
-import { Play, RefreshCw, WifiOff } from "lucide-react";
+import { LogIn, Play, RefreshCw, WifiOff } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
@@ -184,9 +184,19 @@ export function UpcomingList({
                 }
                 action={
                   m.host_key && (
-                    <Button variant="soft" size="sm" onClick={() => onStart(m)} aria-label={`Start ${m.title}`}>
-                      <Play className="size-3.5 fill-current" aria-hidden="true" />
-                      Start
+                    // A live meeting is joined, not started (as in Zoom). Same action: enter as host.
+                    <Button
+                      variant="soft"
+                      size="sm"
+                      onClick={() => onStart(m)}
+                      aria-label={`${m.status === "live" ? "Join" : "Start"} ${m.title}`}
+                    >
+                      {m.status === "live" ? (
+                        <LogIn className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        <Play className="size-3.5 fill-current" aria-hidden="true" />
+                      )}
+                      {m.status === "live" ? "Join" : "Start"}
                     </Button>
                   )
                 }

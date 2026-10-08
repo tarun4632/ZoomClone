@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, ChevronLeft, Copy, Play, RefreshCw, SearchX, WifiOff } from "lucide-react";
+import { Check, ChevronLeft, Copy, LogIn, Play, RefreshCw, SearchX, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -153,8 +153,12 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
             </Button>
             {meeting.host_key && (
               <Button onClick={() => onStart(meeting)} className="min-w-28">
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Start
+                {meeting.status === "live" ? (
+                  <LogIn className="size-4" aria-hidden="true" />
+                ) : (
+                  <Play className="size-4 fill-current" aria-hidden="true" />
+                )}
+                {meeting.status === "live" ? "Join" : "Start"}
               </Button>
             )}
           </div>
