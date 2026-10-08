@@ -50,9 +50,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # Keep on the major version used for development. Its npm (11) wrote
-          # package-lock.json; npm 10 (Node 22) reads the optional WebAssembly packages in
-          # it differently and makes `npm ci` reject the file.
+          # The major version used for development. The runner gets the newest 24.x, whose npm
+          # can be newer than the one on a developer's machine. If "Install dependencies" fails
+          # with "Missing: ... from lock file", an older npm wrote package-lock.json without
+          # some optional packages: regenerate it with a current npm
+          # (`npx npm@latest install --package-lock-only` in client/) and commit the result.
           node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json

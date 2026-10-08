@@ -179,8 +179,11 @@ function ParticipantRow({ participant, viewerIsHost, onMute, onMakeHost, onRemov
   const displayName = participantName(name, participant);
   const isHost = parseRole(metadata) === "host";
   const suffix = roleSuffix(isHost, participant.isLocal);
-  // Host controls: never on your own row, never on another host's row (e.g. the host's second tab).
+  // Make Host / Remove: never on your own row, never on another host's row (e.g. the host's second tab).
   const manageable = viewerIsHost && !participant.isLocal && !isHost;
+  // A host mutes anyone else by clicking their microphone icon. It only ever mutes: once the
+  // mic is off the icon is not a button any more, and only that person can unmute themselves.
+  const canMute = viewerIsHost && !participant.isLocal && !micMuted;
 
   async function mute() {
     setMuting(true);
@@ -206,17 +209,6 @@ function ParticipantRow({ participant, viewerIsHost, onMute, onMakeHost, onRemov
             menuOpen ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
           }`}
         >
-          {!micMuted && (
-            <button
-              type="button"
-              onClick={mute}
-              disabled={muting}
-              aria-label={`Mute ${displayName}`}
-              className={ROW_BUTTON}
-            >
-              Mute
-            </button>
-          )}
           <RowMoreMenu
             name={displayName}
             open={menuOpen}
@@ -226,21 +218,41 @@ function ParticipantRow({ participant, viewerIsHost, onMute, onMakeHost, onRemov
           />
         </div>
       )}
-      <span className="flex shrink-0 items-center gap-2.5 text-[#d0d0d0]">
-        {micMuted ? (
-          <MicOff className="size-4 text-zoom-danger" aria-label="Microphone muted" />
+      <span className="flex shrink-0 items-center text-[#d0d0d0]">
+        {canMute ? (
+          <button
+            type="button"
+            onClick={mute}
+            disabled={muting}
+            aria-label={`Mute ${displayName}`}
+            title={`Mute ${displayName}`}
+            className={`${STATUS_ICON} rounded-md transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-zoom-blue active:bg-white/25 disabled:cursor-wait disabled:opacity-50`}
+          >
+            <Mic className="size-4" aria-hidden />
+          </button>
         ) : (
-          <Mic className="size-4" aria-label="Microphone on" />
+          <span className={STATUS_ICON}>
+            {micMuted ? (
+              <MicOff className="size-4 text-zoom-danger" aria-label="Microphone muted" />
+            ) : (
+              <Mic className="size-4" aria-label="Microphone on" />
+            )}
+          </span>
         )}
-        {cameraMuted ? (
-          <VideoOff className="size-4 text-zoom-danger" aria-label="Camera off" />
-        ) : (
-          <Video className="size-4" aria-label="Camera on" />
-        )}
+        <span className={STATUS_ICON}>
+          {cameraMuted ? (
+            <VideoOff className="size-4 text-zoom-danger" aria-label="Camera off" />
+          ) : (
+            <Video className="size-4" aria-label="Camera on" />
+          )}
+        </span>
       </span>
     </li>
   );
 }
+
+/** Same box for every mic / camera icon, button or not, so the columns line up down the list. */
+const STATUS_ICON = "flex size-7 items-center justify-center";
 
 const ROW_BUTTON =
   "flex items-center gap-0.5 rounded-md bg-[#3a3a3a] px-2.5 py-1 text-xs text-white ring-1 ring-white/10 transition-colors hover:bg-[#4a4a4a] focus-visible:outline-2 focus-visible:outline-zoom-blue disabled:opacity-60";
