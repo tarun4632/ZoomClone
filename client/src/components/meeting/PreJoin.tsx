@@ -256,6 +256,18 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
               {joining && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
               Join
             </button>
+            {/* Back out without joining: release camera/mic first so the light goes off at once. */}
+            <button
+              type="button"
+              disabled={joining}
+              onClick={() => {
+                preview.release();
+                router.push("/");
+              }}
+              className="rounded-lg py-2.5 text-sm font-semibold text-room-text ring-1 ring-white/15 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
           </form>
         </div>
       </main>
