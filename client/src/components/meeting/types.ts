@@ -3,9 +3,8 @@ import type { JoinResponse } from "@/lib/types";
 
 /** Everything the pre-join stage hands to the room stage. */
 export interface MeetingSession {
+  /** Includes `participant_secret`: keep it in memory only, never in storage or the URL. */
   join: JoinResponse;
-  /** Set when this browser holds the host key for the meeting. */
-  hostKey: string | null;
   hostName: string | null;
   displayName: string;
   /** Preview tracks, published as-is on connect. The audio track is already muted if the mic was off. */

@@ -34,6 +34,10 @@ class FakeLiveKit:
         self.mute_calls: list[tuple[str, set[str]]] = []
         self.removed: list[tuple[str, str]] = []
         self.ended_rooms: list[str] = []
+        self.muted_one: list[tuple[str, str]] = []
+        self.role_updates: list[tuple[str, str, str]] = []
+        # Set to an exception to make set_participant_role fail for that identity.
+        self.fail_role_update_for: dict[str, Exception] = {}
 
     def create_token(self, room: str, identity: str, name: str, is_host: bool) -> str:
         self.rooms.setdefault(room, set()).add(identity)
@@ -44,6 +48,15 @@ class FakeLiveKit:
         for identity in self.rooms.get(room, set()):
             if identity not in host_identities:
                 self.muted.add(identity)
+
+    async def mute_participant_audio(self, room: str, identity: str) -> None:
+        self.muted_one.append((room, identity))
+        self.muted.add(identity)
+
+    async def set_participant_role(self, room: str, identity: str, role: str) -> None:
+        if identity in self.fail_role_update_for:
+            raise self.fail_role_update_for[identity]
+        self.role_updates.append((room, identity, role))
 
     async def remove_participant(self, room: str, identity: str) -> None:
         self.removed.append((room, identity))

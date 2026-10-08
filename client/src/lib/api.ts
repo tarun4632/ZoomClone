@@ -5,6 +5,7 @@ import type {
   MeetingOwner,
   MeetingPublic,
   MeetingScope,
+  ParticipantCredentials,
   ScheduleMeetingInput,
   User,
 } from "./types";
@@ -58,11 +59,17 @@ export const api = {
   leave: (number: string, identity: string) =>
     post<void>(`/meetings/${number}/participants/${identity}/leave`),
 
-  end: (number: string, hostKey: string) => post<void>(`/meetings/${number}/end`, { host_key: hostKey }),
-  muteAll: (number: string, hostKey: string) =>
-    post<void>(`/meetings/${number}/mute-all`, { host_key: hostKey }),
-  removeParticipant: (number: string, identity: string, hostKey: string) =>
-    post<void>(`/meetings/${number}/participants/${identity}/remove`, { host_key: hostKey }),
+  // In-meeting host actions. `me` is the caller's own identity + secret from the join response;
+  // the server checks that the caller's current role is "host" (403 otherwise).
+  end: (number: string, me: ParticipantCredentials) => post<void>(`/meetings/${number}/end`, me),
+  muteAll: (number: string, me: ParticipantCredentials) => post<void>(`/meetings/${number}/mute-all`, me),
+  muteParticipant: (number: string, target: string, me: ParticipantCredentials) =>
+    post<void>(`/meetings/${number}/participants/${target}/mute`, me),
+  removeParticipant: (number: string, target: string, me: ParticipantCredentials) =>
+    post<void>(`/meetings/${number}/participants/${target}/remove`, me),
+  /** Hands the host role to `target`; the caller becomes an attendee. */
+  makeHost: (number: string, target: string, me: ParticipantCredentials) =>
+    post<void>(`/meetings/${number}/participants/${target}/make-host`, me),
 };
 
 /** URL for navigator.sendBeacon on pagehide. No body, so no CORS preflight. */

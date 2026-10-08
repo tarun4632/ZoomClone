@@ -144,7 +144,8 @@ CREATE TABLE meeting_participants (               -- one row per join
   meeting_id   TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,   -- set for host joins; NULL = guest
   display_name TEXT NOT NULL,
-  identity     TEXT NOT NULL UNIQUE,              -- random UUID; LiveKit identity
+  identity     TEXT NOT NULL UNIQUE,              -- random UUID; LiveKit identity (visible to others in the room)
+  secret_hash  TEXT,                              -- SHA-256 of the participant's private secret; NULL on seeded history
   role         TEXT NOT NULL CHECK (role IN ('host','attendee')),
   status       TEXT NOT NULL CHECK (status IN ('joined','left','removed')),
   joined_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -203,9 +204,18 @@ Design decisions:
 | POST | `/meetings/{number}/participants/{identity}/leave` | No body. Sets `left_at` and ends the meeting if nobody is left. Calling it twice does nothing extra. |
 | POST | `/meetings/{number}/end` | Host only: deletes the LiveKit room and marks the meeting ended |
 | POST | `/meetings/{number}/mute-all` | Host only. Mutes everyone except participants whose database role is `host`. |
-| POST | `/meetings/{number}/participants/{identity}/remove` | Host only |
+| POST | `/meetings/{number}/participants/{identity}/mute` | Host only. Mutes that participant's microphone (never unmutes). |
+| POST | `/meetings/{number}/participants/{identity}/remove` | Host only. A host can't be removed. |
+| POST | `/meetings/{number}/participants/{identity}/make-host` | Host only. That attendee becomes host and the caller becomes an attendee; both roles update live in LiveKit metadata. |
 
-- Host-only endpoints take `host_key` in the request body and return 403 if it doesn't match.
+- **Host-only endpoints** take the caller's own credentials, `{identity, participant_secret}`, in the body.
+  - The server allows the action only if that participant row is `joined` and its **current** `role` is `host`; otherwise it returns 403.
+  - **Where the secret comes from:** `/join` returns a random `participant_secret` to that participant only. The server stores only its SHA-256 hash.
+  - **Why not the identity alone:** the `identity` is visible to everyone in the LiveKit room, so it can't prove who's calling.
+- **The host key versus the role:**
+  - The `host_key` only decides who may *join as host*.
+  - During a meeting, authority follows the role. That's what makes **Make Host** work: the new host never needs the host key.
+  - Rejoining with the host key gives the host role again, so after a transfer there can briefly be two hosts.
 - The leave endpoint takes no body, so `sendBeacon` can call it cross-origin without content-type or CORS-preflight problems. The identity in the URL is a random UUID, so nobody can guess someone else's.
 - Pre-join runs before `/join`, so the video defaults come from the public info. The pre-join camera toggle starts as `host_video_on` if the browser has a host key for this meeting, and as `participant_video_on` otherwise.
 - `/join` returns `passcode` and `invite_url` so the in-room meeting-info panel can show them to everyone, including a host who joined with only the host key. The caller has already proven access, so this exposes nothing new.
@@ -267,11 +277,13 @@ These names follow the current `livekit-api` SDK. Check them against the docs fo
 
 - **Roles are decided only by the server**, from the host key, and written into the signed token.
 - **Mute all** forces a mute but never forces an unmute, same as Zoom. Participants unmute themselves.
-  - The request body is just `host_key`. The server works out who to skip from the database: every participant row with `role = 'host'` and `status = 'joined'`. The client doesn't need to send its own identity, and a host with two tabs open isn't muted in either.
-- **Remove** disconnects the person from the LiveKit room and sets their row to `removed`. They can rejoin with the same link, which is a known limitation without login.
+  - The server works out who to skip from the database: every participant row with `role = 'host'` and `status = 'joined'`. A host with two tabs open isn't muted in either.
+- **Mute one participant** mutes that person's published audio tracks through LiveKit's `mute_published_track`. Like Mute All, it never unmutes.
+- **Remove** disconnects the person from the LiveKit room and sets their row to `removed`. They can rejoin with the same link, which is a known limitation without login. A host can't be removed.
+- **Make Host** swaps the two rows' `role` in the database and updates both participants' LiveKit metadata with `update_participant`. Every client reads the role from that metadata, so "(Host)" labels and host controls move live. LiveKit is updated before the database commit; if LiveKit fails, the database is left unchanged and the endpoint returns 502.
 - Endpoints that call LiveKit are `async def`. Their short SQLite queries run inline, which is fine with one worker.
 
-### Tests (8, backend only)
+### Tests (10, backend only)
 
 The LiveKit service is replaced with a fake in tests.
 
@@ -282,7 +294,9 @@ The LiveKit service is replaced with a fake in tests.
 5. Joining with the host key gives the host role and `user_id` set. Joining without it gives the attendee role and `user_id` `NULL`.
 6. When the last participant leaves, the meeting is ended and appears in Recent. Calling leave a second time changes nothing.
 7. On an ended **instant** meeting, an attendee's join returns 410 and the host's join restarts it as `live`. On an ended **scheduled** meeting still inside its window, an attendee's join restarts it.
-8. Calling mute-all without the host key returns 403. With the key, every participant except those with the `host` role in the database gets muted (checked through the fake LiveKit service).
+8. Calling mute-all as an attendee, or with a wrong secret, returns 403. With host credentials, every participant except those with the `host` role in the database gets muted (checked through the fake LiveKit service).
+9. Make Host swaps the roles in the database and sends both role updates to LiveKit. Afterwards the old host gets 403 on mute-all, and the new host gets 204.
+10. Muting one participant returns 403 for an attendee caller and 204 for a host. A host can't be removed.
 
 Everything else gets tested by hand in the browser, which matters more for this assignment.
 
@@ -331,7 +345,12 @@ The dashboard hands the host key over through `sessionStorage`, keyed by meeting
 
 **Rule: nothing on screen is only for show.** Every button, link and field works. Zoom's portal items that this app has no feature for are left out: the marketing nav, the top bar, the sidebar products, the plan/upgrade cards, Personal Meeting ID, Test Audio and Video, and the footer.
 
-- **Navbar:** white, with the blue "zoom" text wordmark on the left. On the right: **Schedule**, **Join** and **New Meeting** text links that open the same modals and actions as the tiles, then the user's avatar as a rounded square with their initial. No search box and no settings icon, since neither would do anything.
+- **Navbar:** white, with the blue "zoom" text wordmark on the left. On the right: **Schedule**, **Join** and **New Meeting** text links that open the same modals and actions as the tiles, then a sun/moon **light/dark mode** toggle, then the user's avatar as a rounded square with their initial. No search box and no settings icon, since neither would do anything.
+- **Light and dark mode:**
+  - **Default:** the OS setting, until the user picks one with the toggle; the choice is saved in `localStorage`.
+  - **Before first paint,** an inline script sets `<html data-theme>` so the page never flashes the wrong theme.
+  - **How it re-themes:** dark mode redefines the colour tokens, so every card, list, modal and form changes with it.
+  - **Not affected:** the meeting room and pre-join stay dark in both modes, as in Zoom.
 - **Dashboard layout:** two columns of white cards with about a 16px radius and a very soft shadow. On phones they stack into one column, action card first.
   - **Left, wide column:**
     - **Profile card:** a large rounded-square avatar (initial), the name in large bold type, the email in muted text, and the live clock and date on the right.
@@ -356,7 +375,12 @@ The dashboard hands the host key over through `sessionStorage`, keyed by meeting
   - At the top-left, a pill with an ⓘ icon and the meeting title opens meeting info: ID, host, passcode and invite link.
   - Left out because they'd be decoration only: Chat, React, Share, Host tools, More, the ^ device menus, the view switcher and the encryption shield.
 - **Toolbar:** a full-width dark bar with icon-over-label controls and no button backgrounds. Mute/Unmute and Start/Stop Video are on the left, Participants (with a superscript count) in the centre, and a red circled-X **End** (host) or **Leave** (guest) on the right. The host gets the "End Meeting for All / Leave Meeting" choice.
-- **Participants panel:** "Participants (N)", rows with "(Host)" or "(Host, me)" (from token metadata) and mic/camera icons. For the host: Remove on each row and **Mute All** in the footer.
+- **Participants panel:** "Participants (N)", rows with "(Host)" or "(Host, me)" and mic/camera icons. The role is read live from LiveKit metadata, so it updates when the host changes.
+  - **For the host, on other attendees' rows:**
+    - **Mute**, shown while their mic is on; it acts immediately, as in Zoom.
+    - A **More** menu with **Make Host** (confirm: "Make {name} the host? You will become a participant.") and **Remove**.
+  - **Mute All** in the footer.
+  - **When the role moves,** a brief notice says "You are now the host" or "{name} is now the host".
 - **Confirmations (host):** Remove asks "Remove {name} from the meeting?". Mute All asks "Mute all current participants?". Don't copy Zoom's "All current and new participants will be muted": this build doesn't mute people who join later, so that text would be wrong.
 - **States:** loading, "Invalid meeting ID", "This meeting has ended", "You have been removed", "Cannot access camera".
 
@@ -513,7 +537,7 @@ Rules for every step:
   - stale-meeting cleanup with the 2-minute grace
 - [x] Routers: `GET /me` and every endpoint in the API table. Host-only endpoints return 403 without the host key, and leave takes no body.
 - [x] `GET /meetings` runs the stale-meeting cleanup first, plus the top-up for `upcoming`
-- [x] Tests: a fake LiveKit service and a throwaway SQLite database; the 8 tests in section 4 pass. *8 passed. A local smoke test also checked leave, the auto-end, 410 and the host restart.*
+- [x] Tests: a fake LiveKit service and a throwaway SQLite database; the 10 tests in section 4 pass. *10 passed. A local smoke test also checked leave, the auto-end, 410, the host restart, and Make Host / Mute one against the running server.*
 - [x] Remove the throwaway token route from step 1. *Not needed: the route was never created.*
 - [ ] Redeploy the server. *Not done: not deployed yet.*
 - **Done when:** `pytest` passes, every endpoint behaves correctly when called by hand from FastAPI's `/docs` page (locally and on Railway), and the seeded meetings come back from the deployed `GET /meetings`.
@@ -620,7 +644,8 @@ Built in two halves. 4a gives a working call; 4b adds host controls on top. If t
 - A removed participant can rejoin with the same link (no login means no identity to block). Zoom blocks this by default.
 - Simplifications compared with Zoom:
   - The invite link's `pwd` is the plain passcode. Zoom uses an encoded token.
-  - A host can leave without assigning a new host. Zoom asks the host to "Assign and leave".
+  - A host can leave without assigning a new host. Zoom asks the host to "Assign and leave". The host can hand over the role at any time with **Make Host**.
+  - Rejoining with the host key gives the host role again, so after a transfer there can briefly be two hosts.
   - Mute All mutes only the people in the meeting at that moment.
   - Meeting info opens from the ⓘ title pill at the top-left. The meeting window shows only working controls: Chat, React, Share, Host tools and More are not built.
 - Times are stored in UTC and shown in the browser's timezone.

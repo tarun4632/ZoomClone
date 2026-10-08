@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -37,6 +37,23 @@ def _make_engine(url: str) -> Engine:
 
 engine = _make_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+# create_all() never adds columns to existing tables. Each entry is added once, if missing,
+# so databases created by an older version keep working. (table, column, SQL type)
+_ADDED_COLUMNS = [
+    ("meeting_participants", "secret_hash", "TEXT"),
+]
+
+
+def migrate(bind: Engine) -> None:
+    """Idempotent schema evolution. Run right after Base.metadata.create_all()."""
+    insp = inspect(bind)
+    with bind.begin() as conn:
+        for table, column, sql_type in _ADDED_COLUMNS:
+            existing = {c["name"] for c in insp.get_columns(table)}
+            if column not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
 
 
 def get_db() -> Iterator[Session]:

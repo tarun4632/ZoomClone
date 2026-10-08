@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 import string
 
@@ -14,3 +15,18 @@ def generate_passcode() -> str:
 
 def generate_host_key() -> str:
     return secrets.token_urlsafe(16)
+
+
+def generate_participant_secret() -> str:
+    """Returned once by /join; only its hash is stored."""
+    return secrets.token_urlsafe(24)
+
+
+def hash_secret(secret: str) -> str:
+    return hashlib.sha256(secret.encode()).hexdigest()
+
+
+def secret_matches(secret: str, stored_hash: str | None) -> bool:
+    if stored_hash is None:
+        return False
+    return secrets.compare_digest(hash_secret(secret), stored_hash)

@@ -21,9 +21,17 @@ from ..schemas import (
     JoinResponse,
     MeetingOwner,
     MeetingPublic,
+    ParticipantCredentials,
     ScheduleMeetingInput,
 )
-from .ids import generate_host_key, generate_meeting_number, generate_passcode
+from .ids import (
+    generate_host_key,
+    generate_meeting_number,
+    generate_participant_secret,
+    generate_passcode,
+    hash_secret,
+    secret_matches,
+)
 from .livekit_service import LIST_ROOMS_TIMEOUT_SECONDS, LiveKitService
 
 log = logging.getLogger(__name__)
@@ -85,8 +93,31 @@ def _matches(given: str | None, expected: str) -> bool:
 
 
 def require_host_key(meeting: Meeting, host_key: str | None) -> None:
+    """Join-time check: the host key means "I may join as host"."""
     if not _matches(host_key, meeting.host_key):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid host key")
+
+
+def require_host_participant(
+    db: Session, meeting: Meeting, creds: ParticipantCredentials
+) -> MeetingParticipant:
+    """In-meeting authority: the caller's row in this meeting is joined, currently a host,
+    and the secret matches. Any failure is the same 403, so nothing leaks about why.
+    """
+    caller = db.scalar(
+        select(MeetingParticipant).where(
+            MeetingParticipant.identity == creds.identity,
+            MeetingParticipant.meeting_id == meeting.id,
+        )
+    )
+    if (
+        caller is None
+        or not secret_matches(creds.participant_secret, caller.secret_hash)
+        or caller.status != "joined"
+        or caller.role != "host"
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the host can do that")
+    return caller
 
 
 def get_participant_or_404(db: Session, meeting: Meeting, identity: str) -> MeetingParticipant:
@@ -255,6 +286,7 @@ def join(
         meeting.started_at = now
 
     identity = str(uuid.uuid4())
+    secret = generate_participant_secret()
     db.add(
         MeetingParticipant(
             meeting_id=meeting.id,
@@ -264,6 +296,7 @@ def join(
             identity=identity,
             role="host" if is_host else "attendee",
             status="joined",
+            secret_hash=hash_secret(secret),
             joined_at=now,
         )
     )
@@ -278,7 +311,24 @@ def join(
         title=meeting.title,
         passcode=meeting.passcode,
         invite_url=invite_url(meeting),
+        participant_secret=secret,
     )
+
+
+def check_can_become_host(target: MeetingParticipant) -> None:
+    if target.status != "joined":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Participant is not in the meeting")
+    if target.role == "host":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Participant is already a host")
+
+
+def hand_over_host(
+    db: Session, caller: MeetingParticipant, target: MeetingParticipant
+) -> None:
+    """Target becomes host, caller becomes attendee. user_id is left as it is."""
+    target.role = "host"
+    caller.role = "attendee"
+    db.commit()
 
 
 def leave(db: Session, meeting: Meeting, identity: str, now: datetime) -> None:

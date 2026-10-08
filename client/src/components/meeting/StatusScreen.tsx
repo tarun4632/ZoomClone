@@ -14,7 +14,7 @@ interface StatusScreenProps {
 /** Full-screen dark state: loading, invalid ID, ended, removed, connection errors. */
 export function StatusScreen({ title, message, loading, icon, action }: StatusScreenProps) {
   return (
-    <div className="flex min-h-dvh flex-1 flex-col items-center justify-center bg-room-bg px-4 text-center text-room-text">
+    <div className="fixed inset-0 flex flex-col items-center justify-center overflow-y-auto bg-room-bg px-4 text-center text-room-text">
       {loading ? (
         <LoaderCircle className="mb-4 size-8 animate-spin text-room-text-muted" aria-hidden />
       ) : (

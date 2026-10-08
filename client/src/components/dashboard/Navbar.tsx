@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Spinner } from "@/components/ui/Spinner";
 import type { User } from "@/lib/types";
+import { ThemeToggle } from "./ThemeToggle";
 import type { MeetingActions } from "./useMeetingActions";
 
 function NavAction({
@@ -54,7 +55,10 @@ export function Navbar({ me, actions }: { me: User | null; actions: MeetingActio
           <NavAction label="New Meeting" icon={Video} onClick={actions.newMeeting} busy={actions.starting} />
         </nav>
 
-        <Avatar name={me?.name ?? null} color={me?.avatar_color} className="ml-2 md:ml-6" />
+        <div className="ml-1 flex shrink-0 items-center gap-1 md:ml-4 md:gap-3">
+          <ThemeToggle />
+          <Avatar name={me?.name ?? null} color={me?.avatar_color} />
+        </div>
       </div>
     </header>
   );

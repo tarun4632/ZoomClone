@@ -18,6 +18,8 @@
   --color-line: #e7e9ee;
   --color-surface: #ffffff;
   --color-surface-muted: #f5f6f8;
+  /* Page background behind the cards (white in light mode, like the Zoom portal). */
+  --color-page: #ffffff;
 
   /* Zoom web portal cards: white, ~16px radius, very soft shadow. */
   --radius-card: 16px;
@@ -36,8 +38,38 @@
   --font-mono: var(--font-mono-face), monospace;
 }
 
+/*
+ * Light / dark mode for the dashboard side. An inline script in layout.tsx sets
+ * <html data-theme="light|dark"> before first paint (saved choice, else the OS setting).
+ * Tailwind utilities read these variables, so redefining them re-themes every page.
+ * The meeting room and pre-join stay dark in both modes, like Zoom (they use room-* tokens).
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-zoom-blue: #2d74ff;
+  --color-zoom-blue-hover: #4d88ff;
+  --color-zoom-blue-soft: #1b2a45;
+  --color-zoom-blue-soft-hover: #22365a;
+
+  --color-ink: #eceef2;
+  --color-ink-muted: #9aa1ab;
+  --color-line: #2e3138;
+  --color-surface: #1c1e22;
+  --color-surface-muted: #26292f;
+  --color-page: #131416;
+
+  --shadow-card: 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
 body {
-  background: var(--color-surface);
+  background: var(--color-page, var(--color-surface));
   color: var(--color-ink);
   font-family: var(--font-sans);
 }

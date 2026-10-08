@@ -112,10 +112,15 @@ class JoinResponse(BaseModel):
     title: str
     passcode: str
     invite_url: str
+    # Private to this participant; proves identity for in-meeting host actions.
+    participant_secret: str
 
 
-class HostKeyInput(BaseModel):
-    host_key: str
+class ParticipantCredentials(BaseModel):
+    """The caller's own identity + secret from /join. Body of every in-meeting host action."""
+
+    identity: str = Field(min_length=1, max_length=128)
+    participant_secret: str = Field(min_length=1, max_length=256)
 
 
 class HealthOut(BaseModel):

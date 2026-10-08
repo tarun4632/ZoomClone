@@ -1,8 +1,8 @@
 import type { HTMLAttributes } from "react";
 
-/** White portal card: 16px radius, very soft shadow, roomy padding. */
+/** Portal card: surface colour, 16px radius, very soft shadow (plus a hairline ring in dark mode). */
 export function Card({ className = "", ...rest }: HTMLAttributes<HTMLElement>) {
-  return <section className={`rounded-card bg-surface p-5 shadow-card sm:p-8 ${className}`} {...rest} />;
+  return <section className={`rounded-card bg-surface p-5 shadow-card sm:p-8 dark:ring-1 dark:ring-line ${className}`} {...rest} />;
 }
 
 /** Big bold card heading ("Meetings", "Recent meetings"). */

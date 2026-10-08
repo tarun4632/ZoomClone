@@ -21,6 +21,11 @@ LIST_ROOMS_TIMEOUT_SECONDS = 3.0
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
+def role_metadata(role: str) -> str:
+    """Participant metadata clients read to show "(Host)". Same shape in tokens and updates."""
+    return json.dumps({"role": role})
+
+
 def is_not_found(exc: BaseException) -> bool:
     """True for LiveKit's 'room/participant does not exist' error."""
     return isinstance(exc, api.ServerError) and exc.code == api.ServerErrorCode.NOT_FOUND
@@ -46,7 +51,7 @@ class LiveKitService:
             .with_identity(identity)
             .with_name(name)
             # Other clients read this to show "(Host)" in the participants panel.
-            .with_metadata(json.dumps({"role": "host" if is_host else "attendee"}))
+            .with_metadata(role_metadata("host" if is_host else "attendee"))
             .with_grants(
                 api.VideoGrants(
                     room_join=True,
@@ -74,6 +79,29 @@ class LiveKitService:
                                 room=room, identity=p.identity, track_sid=t.sid, muted=True
                             )
                         )
+
+    async def mute_participant_audio(self, room: str, identity: str) -> None:
+        """Force-mute one participant's published audio tracks. Never unmutes."""
+        async with self._client() as lk:
+            p = await lk.room.get_participant(
+                api.RoomParticipantIdentity(room=room, identity=identity)
+            )
+            for t in p.tracks:
+                if t.type == api.TrackType.AUDIO and not t.muted:
+                    await lk.room.mute_published_track(
+                        api.MuteRoomTrackRequest(
+                            room=room, identity=identity, track_sid=t.sid, muted=True
+                        )
+                    )
+
+    async def set_participant_role(self, room: str, identity: str, role: str) -> None:
+        """Update the role in live participant metadata; every client sees the change."""
+        async with self._client() as lk:
+            await lk.room.update_participant(
+                api.UpdateParticipantRequest(
+                    room=room, identity=identity, metadata=role_metadata(role)
+                )
+            )
 
     async def remove_participant(self, room: str, identity: str) -> None:
         async with self._client() as lk:

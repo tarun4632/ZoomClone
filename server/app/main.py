@@ -6,7 +6,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, engine, migrate
 from .routers import meetings, users
 from .schemas import HealthOut
 from .seed import run_startup_seed
@@ -17,6 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
+    migrate(engine)
     with SessionLocal() as db:
         run_startup_seed(db)
     yield

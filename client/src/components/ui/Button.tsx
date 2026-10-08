@@ -4,14 +4,14 @@ import { Spinner } from "./Spinner";
 /**
  * primary: solid Zoom blue ("Upgrade today" in Zoom's portal).
  * soft: light-blue pill with blue text ("Manage Plan" / "Test Audio and Video").
- * secondary: white with a hairline border (Cancel in dialogs).
+ * secondary: surface colour with a hairline border (Cancel in dialogs).
  */
 export type ButtonVariant = "primary" | "soft" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "rounded-lg bg-zoom-blue text-white hover:bg-zoom-blue-hover",
-  soft: "rounded-xl bg-zoom-blue-soft text-zoom-blue hover:bg-zoom-blue-soft-hover",
+  soft: "rounded-xl bg-zoom-blue-soft text-zoom-blue hover:bg-zoom-blue-soft-hover dark:text-zoom-blue-hover",
   secondary: "rounded-lg border border-line bg-surface text-ink hover:bg-surface-muted",
   ghost: "rounded-lg text-ink hover:bg-surface-muted",
   danger: "rounded-lg bg-zoom-danger text-white hover:bg-zoom-danger-hover",
@@ -45,7 +45,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-zoom-blue focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-2 focus-visible:ring-zoom-blue focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
       {...rest}
     >
       {loading && <Spinner className="size-4" />}

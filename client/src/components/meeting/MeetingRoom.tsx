@@ -6,15 +6,20 @@ import {
   RoomAudioRenderer,
   RoomContext,
   useAudioPlayback,
+  useRoomContext,
+  useLocalParticipant,
+  useParticipantInfo,
   useParticipants,
 } from "@livekit/components-react";
-import { DisconnectReason, Room, RoomEvent } from "livekit-client";
+import { DisconnectReason, Room, RoomEvent, type LocalParticipant, type RemoteParticipant } from "livekit-client";
+import type { ParticipantCredentials } from "@/lib/types";
 import { LoaderCircle, VolumeX } from "lucide-react";
 import { api, leaveUrl } from "@/lib/api";
 import { DisconnectedScreen, type DisconnectKind } from "./DisconnectedScreen";
 import { useRealUnmount } from "./hooks";
 import { LeaveMenu } from "./LeaveMenu";
 import { MeetingInfo } from "./MeetingInfo";
+import { parseRole } from "./participant";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { Toolbar } from "./Toolbar";
 import type { MeetingSession } from "./types";
@@ -148,10 +153,9 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
         connected={connected}
         onLeave={leave}
         onEndForAll={async () => {
-          if (!session.hostKey) return;
           leavingRef.current = true;
           try {
-            await api.end(meetingNumber, session.hostKey);
+            await api.end(meetingNumber, credentials(session));
           } catch (e) {
             leavingRef.current = false;
             throw e;
@@ -176,18 +180,34 @@ interface RoomStageProps {
 
 /** The visible meeting window; lives inside the room context. */
 function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: RoomStageProps) {
+  const room = useRoomContext();
   const participants = useParticipants();
   const { canPlayAudio, startAudio } = useAudioPlayback();
+  const isHost = useIsLocalHost(session.join.role === "host");
   const [panelOpen, setPanelOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
-  const isHost = session.join.role === "host" && session.hostKey !== null;
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(null), 4000);
   }, []);
+
+  // "You are now the host" when the server hands us the role (Make Host by the previous host).
+  // The handing-over side shows "{name} is now the host" from the participants panel.
+  useEffect(() => {
+    const onMetadata = (prev: string | undefined, participant: RemoteParticipant | LocalParticipant) => {
+      if (!participant.isLocal || !prev) return; // `!prev`: the first metadata on connect
+      if (parseRole(prev) !== "host" && parseRole(participant.metadata) === "host") {
+        showNotice("You are now the host");
+      }
+    };
+    room.on(RoomEvent.ParticipantMetadataChanged, onMetadata);
+    return () => {
+      room.off(RoomEvent.ParticipantMetadataChanged, onMetadata);
+    };
+  }, [room, showNotice]);
 
   async function endForAll() {
     try {
@@ -230,23 +250,27 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
               <p className="text-sm">Connecting…</p>
             </div>
           )}
-          {notice && (
-            <div
-              role="status"
-              className="absolute top-2 left-1/2 z-20 w-max max-w-[calc(100%-1rem)] -translate-x-1/2 rounded-lg bg-black/80 px-3 py-2 text-center text-sm text-white shadow-lg"
-            >
-              {notice}
-            </div>
-          )}
         </main>
         {panelOpen && (
           <ParticipantsPanel
             meetingNumber={meetingNumber}
-            hostKey={isHost ? session.hostKey : null}
+            isHost={isHost}
+            me={credentials(session)}
             onClose={() => setPanelOpen(false)}
+            onNotice={showNotice}
           />
         )}
       </div>
+
+      {/* Above the phone participants overlay, so panel actions can report too. */}
+      {notice && (
+        <div
+          role="status"
+          className="absolute top-14 left-1/2 z-50 w-max max-w-[calc(100%-1rem)] -translate-x-1/2 rounded-lg bg-black/85 px-3 py-2 text-center text-sm text-white shadow-lg ring-1 ring-white/10"
+        >
+          {notice}
+        </div>
+      )}
 
       <Toolbar
         participantCount={participants.length}
@@ -258,4 +282,21 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
       />
     </div>
   );
+}
+
+/** Own credentials for in-meeting host actions. The secret stays in memory (the session). */
+function credentials(session: MeetingSession): ParticipantCredentials {
+  return { identity: session.join.identity, participant_secret: session.join.participant_secret };
+}
+
+/**
+ * The local participant's live role, from its LiveKit metadata ({"role": ...}). The server
+ * rewrites that metadata when the host role moves, and `useParticipantInfo` re-renders on
+ * ParticipantMetadataChanged. Before the first metadata arrives (still connecting), the
+ * role from the join response is used.
+ */
+function useIsLocalHost(joinedAsHost: boolean): boolean {
+  const { localParticipant } = useLocalParticipant();
+  const { metadata } = useParticipantInfo({ participant: localParticipant });
+  return metadata ? parseRole(metadata) === "host" : joinedAsHost;
 }

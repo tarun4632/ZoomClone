@@ -17,7 +17,7 @@ export default function MeetingDetailsPage() {
   const actions = useMeetingActions({ me });
 
   return (
-    <div className="flex flex-1 flex-col bg-surface">
+    <div className="flex flex-1 flex-col bg-page">
       <Navbar me={me} actions={actions} />
       <main className="mx-auto w-full max-w-[960px] flex-1 px-4 py-5 sm:px-8 sm:py-8 lg:py-12">
         {actions.startError && (

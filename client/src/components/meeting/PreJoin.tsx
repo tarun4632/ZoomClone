@@ -133,7 +133,6 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
       const tracks = preview.handOff();
       onJoined({
         join: response,
-        hostKey: response.role === "host" ? hostKey : null,
         hostName: meeting.host_name,
         displayName: trimmedName,
         ...tracks,
@@ -156,7 +155,9 @@ export function PreJoin({ number, pwd, onJoined }: PreJoinProps) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-1 flex-col bg-room-bg text-room-text">
+    // Pinned to the viewport like the room: `min-h-dvh` overshot the page height in some
+    // browsers (Edge/Firefox), making the page scroll and showing the white body underneath.
+    <div className="fixed inset-0 flex flex-col overflow-y-auto bg-room-bg text-room-text">
       <main className="flex flex-1 items-center justify-center px-4 py-6 sm:py-10">
         <div className="grid w-full max-w-4xl gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-center md:gap-10">
           <section aria-label="Camera preview">

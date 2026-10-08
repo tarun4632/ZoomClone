@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 
 function Redirecting() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-24 text-ink-muted">
+    <main className="flex flex-1 flex-col items-center justify-center gap-3 bg-page px-4 py-24 text-ink-muted">
       <Spinner className="size-7 text-zoom-blue" />
       <p className="text-sm">Opening meeting…</p>
     </main>

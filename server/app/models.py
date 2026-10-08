@@ -121,8 +121,12 @@ class MeetingParticipant(Base):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     # Random UUID; the LiveKit identity.
     identity: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # Current role. Can move during the meeting (Make Host).
     role: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    # SHA-256 hex of the participant secret returned once by /join. It proves "I am this
+    # participant" for in-meeting host actions. NULL for seeded history rows.
+    secret_hash: Mapped[str | None] = mapped_column(Text)
     joined_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )

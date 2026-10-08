@@ -283,7 +283,7 @@ export function ScheduleMeetingModal({
 
 function ErrorText({ children }: { children: string }) {
   return (
-    <span role="alert" className="mt-1 block text-xs text-zoom-danger">
+    <span role="alert" className="mt-1 block text-xs text-zoom-danger dark:text-red-400">
       {children}
     </span>
   );

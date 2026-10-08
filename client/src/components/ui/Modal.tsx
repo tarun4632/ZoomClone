@@ -64,7 +64,7 @@ export function Modal({ title, onClose, closeDisabled = false, widthClassName = 
         if (pointerDownOnBackdrop.current && e.target === e.currentTarget) requestClose();
         pointerDownOnBackdrop.current = false;
       }}
-      className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${widthClassName} overflow-hidden rounded-card bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/45 open:flex open:flex-col`}
+      className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${widthClassName} overflow-hidden rounded-card bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/45 open:flex dark:ring-1 dark:ring-line dark:backdrop:bg-black/65 open:flex-col`}
     >
       <div className="flex shrink-0 items-center justify-between gap-4 px-5 pt-5 pb-4 sm:px-8 sm:pt-7">
         <h2 id={titleId} className="text-xl font-bold tracking-tight sm:text-[22px]">

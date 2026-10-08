@@ -39,7 +39,7 @@ export function MeetingDetails({ onStart }: { onStart: (meeting: MeetingOwner) =
         action={
           <Link
             href="/"
-            className="inline-flex h-10 items-center rounded-lg bg-zoom-blue px-4 text-sm font-medium text-white transition-colors hover:bg-zoom-blue-hover"
+            className="inline-flex h-10 items-center rounded-lg bg-zoom-blue px-4 text-sm font-medium text-white transition-colors outline-none hover:bg-zoom-blue-hover focus-visible:ring-2 focus-visible:ring-zoom-blue focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Back to Home
           </Link>
@@ -120,13 +120,13 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
     <div>
       <Link
         href="/"
-        className="mb-5 inline-flex items-center gap-1 rounded-md text-[15px] font-medium text-zoom-blue outline-none hover:underline focus-visible:ring-2 focus-visible:ring-zoom-blue"
+        className="mb-5 inline-flex items-center gap-1 rounded-md text-[15px] font-medium text-zoom-blue outline-none hover:underline dark:text-zoom-blue-hover focus-visible:ring-2 focus-visible:ring-zoom-blue"
       >
         <ChevronLeft className="size-4" aria-hidden="true" />
         Home
       </Link>
 
-      <article aria-labelledby="meeting-title" className="overflow-hidden rounded-card bg-surface shadow-card">
+      <article aria-labelledby="meeting-title" className="overflow-hidden rounded-card bg-surface shadow-card dark:ring-1 dark:ring-line">
         <header className="flex flex-col gap-5 border-b border-line p-5 sm:flex-row sm:items-start sm:justify-between sm:p-8">
           <div className="min-w-0">
             <div className="mb-1.5 flex flex-wrap items-center gap-2 text-sm font-medium text-ink-muted">
@@ -177,7 +177,7 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
             <span className="font-mono">{meeting.passcode}</span>
           </Row>
           <Row label="Invite Link">
-            <a href={meeting.invite_url} className="break-all text-zoom-blue hover:underline">
+            <a href={meeting.invite_url} className="break-all text-zoom-blue hover:underline dark:text-zoom-blue-hover">
               {meeting.invite_url}
             </a>
           </Row>
@@ -194,7 +194,7 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
         </dl>
 
         <details className="border-t border-line px-5 py-5 sm:px-8">
-          <summary className="cursor-pointer text-[15px] font-medium text-zoom-blue select-none">Show invitation</summary>
+          <summary className="cursor-pointer text-[15px] font-medium text-zoom-blue select-none dark:text-zoom-blue-hover">Show invitation</summary>
           <pre className="mt-3 overflow-x-auto rounded-xl bg-surface-muted p-4 font-sans text-sm leading-6 whitespace-pre-wrap break-words text-ink">
             {invitation}
           </pre>
@@ -216,7 +216,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 function StatusBadge({ status }: { status: MeetingOwner["status"] }) {
   if (status === "live") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-zoom-blue-soft px-2 py-0.5 text-[11px] font-semibold text-zoom-blue">
+      <span className="inline-flex items-center gap-1 rounded-full bg-zoom-blue-soft px-2 py-0.5 text-[11px] font-semibold text-zoom-blue dark:text-zoom-blue-hover">
         <span className="size-1.5 animate-pulse rounded-full bg-zoom-blue" aria-hidden="true" />
         In progress
       </span>
@@ -242,7 +242,7 @@ function StateCard({
   action: ReactNode;
 }) {
   return (
-    <div role="alert" className="flex flex-col items-center rounded-card bg-surface px-6 py-14 text-center shadow-card">
+    <div role="alert" className="flex flex-col items-center rounded-card bg-surface px-6 py-14 text-center shadow-card dark:ring-1 dark:ring-line">
       <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-surface-muted text-ink-muted">
         {icon}
       </span>
@@ -257,7 +257,7 @@ export function DetailsSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading meeting details">
       <div className="mb-5 h-5 w-16 rounded bg-surface-muted" />
-      <div className="animate-pulse rounded-card bg-surface shadow-card">
+      <div className="animate-pulse rounded-card bg-surface shadow-card dark:ring-1 dark:ring-line">
         <div className="flex flex-col gap-4 border-b border-line p-5 sm:flex-row sm:justify-between sm:p-8">
           <div className="space-y-2">
             <div className="h-3 w-28 rounded bg-surface-muted" />

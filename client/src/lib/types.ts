@@ -63,6 +63,7 @@ export interface JoinInput {
 
 export interface JoinResponse {
   identity: string;
+  /** Role at join time. It can change during the meeting (Make Host); read the live role from LiveKit metadata. */
   role: Role;
   token: string;
   livekit_url: string;
@@ -70,9 +71,26 @@ export interface JoinResponse {
   title: string;
   passcode: string;
   invite_url: string;
+  /**
+   * Private to this participant. Proves "I am this participant" for in-meeting host actions.
+   * Never share it: unlike `identity`, it is not visible to other people in the room.
+   */
+  participant_secret: string;
 }
 
-/** LiveKit participant metadata written by the server into the token. */
+/**
+ * Credentials for in-meeting host actions (end, mute all, mute one, remove, make host).
+ * The server allows the action only if this participant's current role is "host".
+ */
+export interface ParticipantCredentials {
+  identity: string;
+  participant_secret: string;
+}
+
+/**
+ * LiveKit participant metadata. The server writes it into the token at join and
+ * updates it live when the host role moves (Make Host).
+ */
 export interface ParticipantMetadata {
   role: Role;
 }

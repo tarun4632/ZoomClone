@@ -32,7 +32,7 @@ function ActionButton({
       onClick={onClick}
       disabled={busy}
       aria-busy={busy || undefined}
-      className="group flex min-w-0 flex-col items-center gap-2.5 rounded-xl p-1 outline-none focus-visible:ring-2 focus-visible:ring-zoom-blue focus-visible:ring-offset-2 disabled:cursor-wait"
+      className="group flex min-w-0 flex-col items-center gap-2.5 rounded-xl p-1 outline-none focus-visible:ring-2 focus-visible:ring-zoom-blue focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-wait"
     >
       <span
         className={`flex size-[62px] items-center justify-center rounded-[14px] text-white transition-[background-color,transform] duration-150 group-active:scale-95 ${tones[tone]}`}
@@ -46,7 +46,7 @@ function ActionButton({
   );
 }
 
-/** Zoom's calendar glyph: a white calendar showing today's day of the month. */
+/** Zoom's calendar glyph: a white calendar showing today's day of the month (same in both themes). */
 function CalendarGlyph() {
   const today = useToday();
   return (

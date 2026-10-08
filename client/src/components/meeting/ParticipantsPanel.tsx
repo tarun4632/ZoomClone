@@ -1,25 +1,51 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { useIsMuted, useParticipantInfo, useParticipants } from "@livekit/components-react";
 import { Track, type Participant } from "livekit-client";
-import { Mic, MicOff, Video, VideoOff, X } from "lucide-react";
+import { ChevronDown, Mic, MicOff, Video, VideoOff, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { initials } from "@/lib/format";
+import type { ParticipantCredentials } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useClickOutside } from "./hooks";
 import { parseRole, participantName, roleSuffix } from "./participant";
 
 interface ParticipantsPanelProps {
   meetingNumber: string;
-  /** Present only for the host; enables Remove and Mute All. */
-  hostKey: string | null;
+  /** The local participant's live role; enables the host controls. */
+  isHost: boolean;
+  /** Own credentials for host actions; the server checks the current role. */
+  me: ParticipantCredentials;
   onClose: () => void;
+  /** Room-level notice, e.g. "{name} is now the host". */
+  onNotice: (message: string) => void;
 }
 
-type Pending = { kind: "remove"; identity: string; name: string } | { kind: "muteAll" };
+type Pending =
+  | { kind: "remove"; identity: string; name: string }
+  | { kind: "makeHost"; identity: string; name: string }
+  | { kind: "muteAll" };
+
+const CONFIRM: Record<Pending["kind"], { label: string; danger: boolean }> = {
+  remove: { label: "Remove", danger: true },
+  makeHost: { label: "Make Host", danger: false },
+  muteAll: { label: "Mute All", danger: false },
+};
+
+function confirmMessage(pending: Pending): string {
+  switch (pending.kind) {
+    case "remove":
+      return `Remove ${pending.name} from the meeting?`;
+    case "makeHost":
+      return `Make ${pending.name} the host? You will become a participant.`;
+    case "muteAll":
+      return "Mute all current participants?";
+  }
+}
 
 /** Right-side panel on desktop, full-screen overlay on phones. */
-export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: ParticipantsPanelProps) {
+export function ParticipantsPanel({ meetingNumber, isHost, me, onClose, onNotice }: ParticipantsPanelProps) {
   const participants = useParticipants();
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,17 +67,34 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
   }
 
   async function confirmPending() {
-    if (!pending || !hostKey) return;
+    if (!pending) return;
     try {
       if (pending.kind === "remove") {
-        await api.removeParticipant(meetingNumber, pending.identity, hostKey);
+        await api.removeParticipant(meetingNumber, pending.identity, me);
+      } else if (pending.kind === "makeHost") {
+        await api.makeHost(meetingNumber, pending.identity, me);
+        onNotice(`${pending.name} is now the host`);
       } else {
-        await api.muteAll(meetingNumber, hostKey);
+        await api.muteAll(meetingNumber, me);
       }
       setPending(null);
     } catch {
       setPending(null);
-      showError(pending.kind === "remove" ? `Could not remove ${pending.name}` : "Could not mute everyone");
+      showError(
+        pending.kind === "remove"
+          ? `Could not remove ${pending.name}`
+          : pending.kind === "makeHost"
+            ? `Could not make ${pending.name} the host`
+            : "Could not mute everyone",
+      );
+    }
+  }
+
+  async function muteOne(identity: string, name: string) {
+    try {
+      await api.muteParticipant(meetingNumber, identity, me);
+    } catch {
+      showError(`Could not mute ${name}`);
     }
   }
 
@@ -77,20 +120,22 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
           <ParticipantRow
             key={p.identity}
             participant={p}
-            canRemove={hostKey !== null}
+            viewerIsHost={isHost}
+            onMute={(name) => muteOne(p.identity, name)}
+            onMakeHost={(name) => setPending({ kind: "makeHost", identity: p.identity, name })}
             onRemove={(name) => setPending({ kind: "remove", identity: p.identity, name })}
           />
         ))}
       </ul>
 
-      {(hostKey || error) && (
+      {(isHost || error) && (
         <footer className="flex shrink-0 flex-col items-center border-t border-white/10 p-3">
           {error && (
             <p role="alert" className="mb-2 self-stretch text-center text-xs text-red-400">
               {error}
             </p>
           )}
-          {hostKey && (
+          {isHost && (
             <button
               type="button"
               onClick={() => setPending({ kind: "muteAll" })}
@@ -102,15 +147,12 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
         </footer>
       )}
 
-      {pending && (
+      {/* Host-only dialogs close by themselves if the host role moves away meanwhile. */}
+      {pending && isHost && (
         <ConfirmDialog
-          message={
-            pending.kind === "remove"
-              ? `Remove ${pending.name} from the meeting?`
-              : "Mute all current participants?"
-          }
-          confirmLabel={pending.kind === "remove" ? "Remove" : "Mute All"}
-          danger={pending.kind === "remove"}
+          message={confirmMessage(pending)}
+          confirmLabel={CONFIRM[pending.kind].label}
+          danger={CONFIRM[pending.kind].danger}
           onConfirm={confirmPending}
           onCancel={() => setPending(null)}
         />
@@ -121,20 +163,33 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
 
 interface ParticipantRowProps {
   participant: Participant;
-  canRemove: boolean;
+  viewerIsHost: boolean;
+  onMute: (name: string) => Promise<void>;
+  onMakeHost: (name: string) => void;
   onRemove: (name: string) => void;
 }
 
-function ParticipantRow({ participant, canRemove, onRemove }: ParticipantRowProps) {
+function ParticipantRow({ participant, viewerIsHost, onMute, onMakeHost, onRemove }: ParticipantRowProps) {
   const { name, metadata } = useParticipantInfo({ participant });
   const micMuted = useIsMuted({ participant, source: Track.Source.Microphone });
   const cameraMuted = useIsMuted({ participant, source: Track.Source.Camera });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [muting, setMuting] = useState(false);
 
   const displayName = participantName(name, participant);
   const isHost = parseRole(metadata) === "host";
   const suffix = roleSuffix(isHost, participant.isLocal);
-  // Never offer Remove on yourself or on a host (e.g. the host's own second tab).
-  const removable = canRemove && !participant.isLocal && !isHost;
+  // Host controls: never on your own row, never on another host's row (e.g. the host's second tab).
+  const manageable = viewerIsHost && !participant.isLocal && !isHost;
+
+  async function mute() {
+    setMuting(true);
+    try {
+      await onMute(displayName);
+    } finally {
+      setMuting(false);
+    }
+  }
 
   return (
     <li className="group flex items-center gap-3 px-4 py-2 transition-colors hover:bg-white/5">
@@ -145,14 +200,31 @@ function ParticipantRow({ participant, canRemove, onRemove }: ParticipantRowProp
         {displayName}
         {suffix && <span className="text-[#a6a6a6]"> {suffix}</span>}
       </div>
-      {removable && (
-        <button
-          type="button"
-          onClick={() => onRemove(displayName)}
-          className="rounded-md bg-[#3a3a3a] px-2.5 py-1 text-xs text-white ring-1 ring-white/10 transition-colors hover:bg-zoom-danger hover:ring-zoom-danger sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+      {manageable && (
+        <div
+          className={`flex shrink-0 items-center gap-1 ${
+            menuOpen ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
+          }`}
         >
-          Remove
-        </button>
+          {!micMuted && (
+            <button
+              type="button"
+              onClick={mute}
+              disabled={muting}
+              aria-label={`Mute ${displayName}`}
+              className={ROW_BUTTON}
+            >
+              Mute
+            </button>
+          )}
+          <RowMoreMenu
+            name={displayName}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            onMakeHost={() => onMakeHost(displayName)}
+            onRemove={() => onRemove(displayName)}
+          />
+        </div>
       )}
       <span className="flex shrink-0 items-center gap-2.5 text-[#d0d0d0]">
         {micMuted ? (
@@ -167,5 +239,99 @@ function ParticipantRow({ participant, canRemove, onRemove }: ParticipantRowProp
         )}
       </span>
     </li>
+  );
+}
+
+const ROW_BUTTON =
+  "flex items-center gap-0.5 rounded-md bg-[#3a3a3a] px-2.5 py-1 text-xs text-white ring-1 ring-white/10 transition-colors hover:bg-[#4a4a4a] focus-visible:outline-2 focus-visible:outline-zoom-blue disabled:opacity-60";
+
+interface RowMoreMenuProps {
+  name: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onMakeHost: () => void;
+  onRemove: () => void;
+}
+
+/**
+ * "More" menu on a participant row. It is positioned `fixed` from the button, so the
+ * scrolling participant list can't clip it; it closes on scroll, resize, Escape or outside click.
+ */
+function RowMoreMenu({ name, open, onOpenChange, onMakeHost, onRemove }: RowMoreMenuProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<CSSProperties>({});
+  useClickOutside(rootRef, () => onOpenChange(false), open);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => onOpenChange(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open, onOpenChange]);
+
+  function toggle(e: MouseEvent<HTMLButtonElement>) {
+    if (open) {
+      onOpenChange(false);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const right = window.innerWidth - rect.right;
+    // Open downwards unless the menu would run off the bottom of the screen.
+    setPosition(
+      rect.bottom + 96 > window.innerHeight
+        ? { right, bottom: window.innerHeight - rect.top + 4 }
+        : { right, top: rect.bottom + 4 },
+    );
+    onOpenChange(true);
+  }
+
+  function choose(action: () => void) {
+    onOpenChange(false);
+    action();
+  }
+
+  return (
+    <div ref={rootRef}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`More options for ${name}`}
+        className={ROW_BUTTON}
+      >
+        More
+        <ChevronDown className="size-3" aria-hidden />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Options for ${name}`}
+          style={position}
+          className="fixed z-40 flex w-40 flex-col rounded-md bg-[#2b2b2b] py-1 text-sm shadow-2xl ring-1 ring-white/10"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(onMakeHost)}
+            className="px-3 py-1.5 text-left text-white transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+          >
+            Make Host
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => choose(onRemove)}
+            className="px-3 py-1.5 text-left text-white transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

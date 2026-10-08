@@ -80,7 +80,7 @@ function MeetingRow({
             (that page then shows who hosted and has no Start button). */}
         <Link
           href={`/meetings/${meeting.meeting_number}`}
-          className="mt-0.5 block truncate text-[15px] font-semibold text-ink outline-none transition-colors after:absolute after:-inset-x-2 after:inset-y-0.5 after:rounded-xl hover:text-zoom-blue focus-visible:after:ring-2 focus-visible:after:ring-zoom-blue"
+          className="mt-0.5 block truncate text-[15px] font-semibold text-ink outline-none transition-colors after:absolute after:-inset-x-2 after:inset-y-0.5 after:rounded-xl hover:text-zoom-blue focus-visible:after:ring-2 dark:hover:text-zoom-blue-hover focus-visible:after:ring-zoom-blue"
         >
           {meeting.title}
         </Link>
@@ -170,7 +170,7 @@ export function UpcomingList({
                 eyebrow={upcomingTime(m)}
                 badge={
                   m.status === "live" && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-zoom-blue-soft px-2 py-0.5 text-[11px] font-semibold text-zoom-blue">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-zoom-blue-soft px-2 py-0.5 text-[11px] font-semibold text-zoom-blue dark:text-zoom-blue-hover">
                       <span className="size-1.5 animate-pulse rounded-full bg-zoom-blue" aria-hidden="true" />
                       In progress
                     </span>
@@ -220,23 +220,34 @@ function recentDate(m: MeetingOwner): string {
 
 const endedAt = (m: MeetingOwner) => Date.parse(m.ended_at ?? m.started_at ?? m.created_at);
 
-/** An open cardboard box in Zoom blues, for the empty state. */
+/**
+ * An open cardboard box in Zoom blues, for the empty state. Each face reads a CSS variable,
+ * set per theme on the <svg>, so the box keeps its shape but sits right on a dark card.
+ */
+const boxPalette = [
+  "[--box-shadow:#0b5cff] [--box-back-l:#cddfff] [--box-back-r:#9dbfff] [--box-inside:#1f3fae] [--box-inside-shade:#2f55d4]",
+  "[--box-left:#4b8dff] [--box-right:#0b5cff] [--box-flap-l:#e8f0ff] [--box-flap-r:#b9d2ff]",
+  "dark:[--box-shadow:#000000] dark:[--box-back-l:#3d5fa6] dark:[--box-back-r:#2f4f94] dark:[--box-inside:#0d1a44]",
+  "dark:[--box-inside-shade:#16296b] dark:[--box-left:#4a86ff] dark:[--box-right:#2d74ff]",
+  "dark:[--box-flap-l:#6f95e0] dark:[--box-flap-r:#4c74c7]",
+].join(" ");
+
 function EmptyBox() {
   return (
-    <svg viewBox="10 6 185 136" aria-hidden="true" className="h-auto w-40 sm:w-44">
-      <ellipse cx="108" cy="130" rx="72" ry="8" fill="#0b5cff" opacity="0.08" />
+    <svg viewBox="10 6 185 136" aria-hidden="true" className={`h-auto w-40 sm:w-44 ${boxPalette}`}>
+      <ellipse cx="108" cy="130" rx="72" ry="8" fill="var(--box-shadow)" opacity="0.1" />
       {/* back flaps */}
-      <polygon points="45,52 100,34 80,14 25,32" fill="#cddfff" />
-      <polygon points="100,34 155,52 175,32 120,14" fill="#9dbfff" />
+      <polygon points="45,52 100,34 80,14 25,32" fill="var(--box-back-l)" />
+      <polygon points="100,34 155,52 175,32 120,14" fill="var(--box-back-r)" />
       {/* inside of the box */}
-      <polygon points="45,52 100,34 155,52 100,70" fill="#1f3fae" />
-      <polygon points="45,52 100,34 100,46 60,59" fill="#2f55d4" />
+      <polygon points="45,52 100,34 155,52 100,70" fill="var(--box-inside)" />
+      <polygon points="45,52 100,34 100,46 60,59" fill="var(--box-inside-shade)" />
       {/* sides */}
-      <polygon points="45,52 100,70 100,128 45,108" fill="#4b8dff" />
-      <polygon points="100,70 155,52 155,108 100,128" fill="#0b5cff" />
+      <polygon points="45,52 100,70 100,128 45,108" fill="var(--box-left)" />
+      <polygon points="100,70 155,52 155,108 100,128" fill="var(--box-right)" />
       {/* front flaps, folded outward */}
-      <polygon points="45,52 100,70 72,52 17,34" fill="#e8f0ff" />
-      <polygon points="100,70 155,52 183,34 128,52" fill="#b9d2ff" />
+      <polygon points="45,52 100,70 72,52 17,34" fill="var(--box-flap-l)" />
+      <polygon points="100,70 155,52 183,34 128,52" fill="var(--box-flap-r)" />
     </svg>
   );
 }
