@@ -6,7 +6,7 @@ import { Track } from "livekit-client";
 import { useElementSize } from "./hooks";
 import { VideoTile } from "./VideoTile";
 
-const GAP = 8; // matches gap-2
+const GAP = 4; // matches gap-1
 const MIN_TILE_HEIGHT = 90;
 
 interface Layout {
@@ -17,11 +17,16 @@ interface Layout {
 
 /**
  * Picks the column count that gives the largest tiles for `count` tiles in a box.
- * Phones get at most 2 columns and slightly taller tiles; if tiles would get too
- * small, the grid keeps the max column count and scrolls vertically.
+ * A lone participant on desktop gets the biggest 16:9 tile (letterboxed in black, as in
+ * Zoom); on a phone it fills the whole stage. Phones get at most 2 columns and slightly
+ * taller tiles; if tiles would get too small, the grid keeps the max column count and
+ * scrolls vertically.
  */
 function galleryLayout(boxWidth: number, boxHeight: number, count: number): Layout {
   const phone = boxWidth < 640;
+  if (count === 1 && phone) {
+    return { width: Math.floor(boxWidth), height: Math.floor(boxHeight), scroll: false };
+  }
   const aspect = phone ? 4 / 3 : 16 / 9;
   const maxCols = Math.min(count, phone ? 2 : 7);
 
@@ -64,7 +69,7 @@ export function VideoGrid() {
   return (
     <div
       ref={boxRef}
-      className={`absolute inset-0 flex flex-wrap justify-center gap-2 overflow-x-hidden p-2 ${
+      className={`absolute inset-0 flex flex-wrap justify-center gap-1 overflow-x-hidden ${
         layout?.scroll ? "content-start overflow-y-auto" : "content-center overflow-y-hidden"
       }`}
     >
@@ -75,6 +80,7 @@ export function VideoGrid() {
             trackRef={trackRef}
             width={layout.width}
             height={layout.height}
+            rounded={ordered.length > 1}
           />
         ))}
     </div>

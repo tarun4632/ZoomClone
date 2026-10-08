@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import { useLocalParticipant } from "@livekit/components-react";
-import { Mic, MicOff, Users, Video, VideoOff } from "lucide-react";
+import { Mic, Users, Video } from "lucide-react";
+import { MutedMicIcon, VideoOffIcon } from "./icons";
 
 interface ToolbarProps {
   participantCount: number;
@@ -15,6 +16,7 @@ interface ToolbarProps {
   leaveControl: ReactNode;
 }
 
+/** Zoom's bottom bar: mic and video on the left, Participants centred, End/Leave on the right. */
 export function Toolbar({
   participantCount,
   panelOpen,
@@ -51,42 +53,31 @@ export function Toolbar({
   }
 
   return (
-    <footer className="flex h-16 shrink-0 items-center justify-between gap-1 bg-room-toolbar px-2 sm:h-[72px] sm:px-4">
-      <div className="flex items-center gap-0.5 sm:gap-1">
+    <footer className="grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[#1a1a1a] px-1 sm:h-[68px] sm:px-3">
+      <div className="flex items-center justify-start">
         <ToolbarButton
           label={isMicrophoneEnabled ? "Mute" : "Unmute"}
           onClick={toggleMic}
           disabled={micBusy || mediaDisabled}
-          icon={
-            isMicrophoneEnabled ? (
-              <Mic className="size-5 sm:size-6" />
-            ) : (
-              <MicOff className="size-5 text-zoom-danger sm:size-6" />
-            )
-          }
+          icon={isMicrophoneEnabled ? <Mic className="size-6" /> : <MutedMicIcon className="size-6" />}
         />
         <ToolbarButton
           label={isCameraEnabled ? "Stop Video" : "Start Video"}
           onClick={toggleCamera}
           disabled={camBusy || mediaDisabled}
-          icon={
-            isCameraEnabled ? (
-              <Video className="size-5 sm:size-6" />
-            ) : (
-              <VideoOff className="size-5 text-zoom-danger sm:size-6" />
-            )
-          }
+          icon={isCameraEnabled ? <Video className="size-6" /> : <VideoOffIcon className="size-6" />}
         />
       </div>
 
       <ToolbarButton
         label="Participants"
+        ariaLabel={`Participants (${participantCount})`}
         onClick={onTogglePanel}
-        active={panelOpen}
+        pressed={panelOpen}
         icon={
           <span className="relative">
-            <Users className="size-5 sm:size-6" />
-            <span className="absolute -top-1.5 -right-3 min-w-4 rounded-full bg-room-panel px-1 text-center text-[10px] leading-4 font-semibold text-room-text ring-1 ring-white/15">
+            <Users className="size-6" />
+            <span className="absolute -top-1.5 left-full ml-0.5 text-[11px] leading-none font-medium text-white">
               {participantCount}
             </span>
           </span>
@@ -102,19 +93,26 @@ interface ToolbarButtonProps {
   label: string;
   icon: ReactNode;
   onClick: () => void;
+  ariaLabel?: string;
   disabled?: boolean;
-  active?: boolean;
+  pressed?: boolean;
+  /** The button opens a menu: announce it with aria-haspopup/aria-expanded instead of aria-pressed. */
+  menu?: boolean;
 }
 
-function ToolbarButton({ label, icon, onClick, disabled, active }: ToolbarButtonProps) {
+/** Icon stacked over a small label; no background until hovered. Shared with LeaveMenu. */
+export function ToolbarButton({ label, icon, onClick, ariaLabel, disabled, pressed, menu }: ToolbarButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={active}
-      className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-1.5 py-1.5 text-room-text transition-colors hover:bg-white/10 disabled:opacity-60 sm:min-w-[72px] sm:px-2 ${
-        active ? "bg-white/10" : ""
+      aria-label={ariaLabel}
+      aria-pressed={menu ? undefined : pressed}
+      aria-haspopup={menu ? "menu" : undefined}
+      aria-expanded={menu ? pressed : undefined}
+      className={`flex min-w-[60px] flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[#e8e8e8] transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-2 focus-visible:outline-zoom-blue disabled:opacity-50 disabled:hover:bg-transparent sm:min-w-[76px] sm:px-2 ${
+        pressed ? "bg-white/10" : ""
       }`}
     >
       <span aria-hidden className="flex h-6 items-center">

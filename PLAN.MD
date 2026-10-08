@@ -347,14 +347,15 @@ The dashboard hands the host key over through `sessionStorage`, keyed by meeting
   - Topic (pre-filled "{Name}'s Zoom Meeting", like Zoom), Description, date, time, Duration (hours and minutes), Host video on/off, Participant video on/off.
   - A read-only time zone label showing the browser's time zone (e.g. "India Standard Time"). This is the zone the entered time is converted to UTC from, so the label is accurate.
   - After saving, show the details page with **Copy Invitation** (template below).
-- **Pre-join:** dark background, camera preview, mic and camera toggles (the camera starts as the meeting's host/participant video default says), a name input, and a **Meeting Passcode** field shown only when the URL has no `pwd` and there's no host key. Then a blue **Join** button.
-- **Meeting room:**
-  - Dark background (around `#1A1A1A`) and one responsive grid of tiles.
-  - Each tile has a name label at the bottom-left with a muted-mic icon.
-  - The speaker gets a green border, as in Zoom's gallery view (LiveKit's `isSpeaking`). Eyedrop the exact green from a screenshot.
+- **Pre-join:** dark background, camera preview, mic and camera toggles (the camera starts as the meeting's host/participant video default says), a name input, and a **Meeting Passcode** field shown only when the URL has no `pwd` and there's no host key. Then a blue **Join** button and a **Cancel** button that releases the camera and mic and returns to the dashboard.
+- **Meeting room** (styled after a screenshot of the real Zoom meeting window, with only working controls):
+  - Near-black stage, with video tiles filling it edge to edge; a single participant fills the stage.
+  - Each tile has a dark translucent name label at the bottom-left, with a red slashed mic when muted.
+  - The speaker gets a green border, as in Zoom's gallery view (LiveKit's `isSpeaking`).
   - With video off, show the name or initials in the centre.
-  - A green shield at the top-left opens meeting info: ID, passcode and invite link.
-- **Toolbar:** Mute/Unmute and Start/Stop Video on the left, Participants (with a count) in the centre, a red **End** or **Leave** on the right. The host gets the "End Meeting for All / Leave Meeting" choice.
+  - At the top-left, a pill with an ⓘ icon and the meeting title opens meeting info: ID, host, passcode and invite link.
+  - Left out because they'd be decoration only: Chat, React, Share, Host tools, More, the ^ device menus, the view switcher and the encryption shield.
+- **Toolbar:** a full-width dark bar with icon-over-label controls and no button backgrounds. Mute/Unmute and Start/Stop Video are on the left, Participants (with a superscript count) in the centre, and a red circled-X **End** (host) or **Leave** (guest) on the right. The host gets the "End Meeting for All / Leave Meeting" choice.
 - **Participants panel:** "Participants (N)", rows with "(Host)" or "(Host, me)" (from token metadata) and mic/camera icons. For the host: Remove on each row and **Mute All** in the footer.
 - **Confirmations (host):** Remove asks "Remove {name} from the meeting?". Mute All asks "Mute all current participants?". Don't copy Zoom's "All current and new participants will be muted": this build doesn't mute people who join later, so that text would be wrong.
 - **States:** loading, "Invalid meeting ID", "This meeting has ended", "You have been removed", "Cannot access camera".
@@ -587,7 +588,7 @@ Built in two halves. 4a gives a working call; 4b adds host controls on top. If t
   - closing the last tab ends the meeting (it shows in Recent)
 
 **4b. Host controls and end states**
-- [x] `MeetingInfo` (the green shield): meeting ID, passcode and invite link from the `/join` response
+- [x] `MeetingInfo` (the ⓘ title pill at the top-left): meeting ID, passcode and invite link from the `/join` response
 - [x] Participants panel, for the host: Remove on each row and Mute All in the footer, each behind its confirmation dialog
 - [x] Toolbar, for the host: the End menu with "End Meeting for All" and "Leave Meeting"; End for all calls `POST /end`
 - [x] `Disconnected` handler: show "You have been removed" or "This meeting has been ended by the host", depending on the reason
@@ -621,7 +622,7 @@ Built in two halves. 4a gives a working call; 4b adds host controls on top. If t
   - The invite link's `pwd` is the plain passcode. Zoom uses an encoded token.
   - A host can leave without assigning a new host. Zoom asks the host to "Assign and leave".
   - Mute All mutes only the people in the meeting at that moment.
-  - Meeting info opens from the green shield, as in older Zoom versions. Zoom 6.7+ moved it to More → Meeting Info.
+  - Meeting info opens from the ⓘ title pill at the top-left. The meeting window shows only working controls: Chat, React, Share, Host tools and More are not built.
 - Times are stored in UTC and shown in the browser's timezone.
 
 ---

@@ -199,8 +199,8 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
 
   return (
     // Pinned to the viewport: the room never scrolls the page, so the toolbar stays on screen.
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-room-bg text-room-text">
-      <header className="flex h-10 shrink-0 items-center gap-2 px-2 sm:px-3">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-black text-white">
+      <header className="flex h-11 shrink-0 items-center gap-2 bg-[#1a1a1a] px-2 sm:px-3">
         <MeetingInfo
           title={session.join.title}
           meetingNumber={session.join.meeting_number || meetingNumber}
@@ -212,7 +212,7 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
           <button
             type="button"
             onClick={() => void startAudio()}
-            className="flex items-center gap-1.5 rounded-md bg-zoom-blue px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zoom-blue-hover"
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-zoom-blue px-2.5 py-1 text-xs font-medium whitespace-nowrap text-white transition-colors hover:bg-zoom-blue-hover"
           >
             <VolumeX className="size-3.5" aria-hidden />
             Click to enable audio
@@ -225,7 +225,7 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
           {connected ? (
             <VideoGrid />
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-room-text-muted">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#a6a6a6]">
               <LoaderCircle className="size-8 animate-spin" aria-hidden />
               <p className="text-sm">Connecting…</p>
             </div>

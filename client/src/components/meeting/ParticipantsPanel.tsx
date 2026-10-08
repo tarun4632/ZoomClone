@@ -58,15 +58,15 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
   return (
     <aside
       aria-label="Participants"
-      className="fixed inset-0 z-30 flex flex-col bg-room-panel text-room-text sm:static sm:z-auto sm:w-80 sm:shrink-0 sm:border-l sm:border-white/10"
+      className="fixed inset-0 z-30 flex flex-col bg-[#242424] text-white sm:static sm:z-auto sm:w-80 sm:shrink-0 sm:border-l sm:border-black"
     >
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 px-4">
-        <h2 className="text-sm font-semibold">Participants ({participants.length})</h2>
+      <header className="relative flex h-11 shrink-0 items-center justify-center border-b border-white/10 px-10">
+        <h2 className="truncate text-sm font-semibold">Participants ({participants.length})</h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close participants"
-          className="flex size-8 items-center justify-center rounded-md text-room-text-muted transition-colors hover:bg-white/10 hover:text-room-text"
+          className="absolute right-2 flex size-8 items-center justify-center rounded-md text-[#bdbdbd] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-zoom-blue"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -84,9 +84,9 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
       </ul>
 
       {(hostKey || error) && (
-        <footer className="shrink-0 border-t border-white/10 p-3">
+        <footer className="flex shrink-0 flex-col items-center border-t border-white/10 p-3">
           {error && (
-            <p role="alert" className="mb-2 text-xs text-red-400">
+            <p role="alert" className="mb-2 self-stretch text-center text-xs text-red-400">
               {error}
             </p>
           )}
@@ -94,7 +94,7 @@ export function ParticipantsPanel({ meetingNumber, hostKey, onClose }: Participa
             <button
               type="button"
               onClick={() => setPending({ kind: "muteAll" })}
-              className="w-full rounded-lg bg-white/10 py-2 text-sm font-medium text-room-text transition-colors hover:bg-white/20"
+              className="rounded-md bg-[#3a3a3a] px-4 py-1.5 text-sm font-medium text-white ring-1 ring-white/10 transition-colors hover:bg-[#474747] focus-visible:outline-2 focus-visible:outline-zoom-blue"
             >
               Mute All
             </button>
@@ -137,24 +137,24 @@ function ParticipantRow({ participant, canRemove, onRemove }: ParticipantRowProp
   const removable = canRemove && !participant.isLocal && !isHost;
 
   return (
-    <li className="group flex items-center gap-3 px-4 py-2 hover:bg-white/5">
+    <li className="group flex items-center gap-3 px-4 py-2 transition-colors hover:bg-white/5">
       <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-zoom-blue text-xs font-semibold text-white">
         {initials(displayName)}
       </div>
       <div className="min-w-0 flex-1 truncate text-sm">
         {displayName}
-        {suffix && <span className="text-room-text-muted"> {suffix}</span>}
+        {suffix && <span className="text-[#a6a6a6]"> {suffix}</span>}
       </div>
       {removable && (
         <button
           type="button"
           onClick={() => onRemove(displayName)}
-          className="rounded-md px-2 py-1 text-xs text-room-text ring-1 ring-white/15 transition-colors hover:bg-zoom-danger hover:ring-zoom-danger sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+          className="rounded-md bg-[#3a3a3a] px-2.5 py-1 text-xs text-white ring-1 ring-white/10 transition-colors hover:bg-zoom-danger hover:ring-zoom-danger sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
         >
           Remove
         </button>
       )}
-      <span className="flex shrink-0 items-center gap-2 text-room-text-muted">
+      <span className="flex shrink-0 items-center gap-2.5 text-[#d0d0d0]">
         {micMuted ? (
           <MicOff className="size-4 text-zoom-danger" aria-label="Microphone muted" />
         ) : (
