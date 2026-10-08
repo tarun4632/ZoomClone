@@ -198,7 +198,8 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
   }
 
   return (
-    <div className="flex h-dvh flex-1 flex-col overflow-hidden bg-room-bg text-room-text">
+    // Pinned to the viewport: the room never scrolls the page, so the toolbar stays on screen.
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-room-bg text-room-text">
       <header className="flex h-10 shrink-0 items-center gap-2 px-2 sm:px-3">
         <MeetingInfo
           title={session.join.title}
@@ -220,11 +221,11 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        <main className="relative min-w-0 flex-1">
+        <main className="relative min-w-0 flex-1 overflow-hidden">
           {connected ? (
             <VideoGrid />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-room-text-muted">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-room-text-muted">
               <LoaderCircle className="size-8 animate-spin" aria-hidden />
               <p className="text-sm">Connecting…</p>
             </div>

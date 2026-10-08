@@ -58,10 +58,13 @@ export function VideoGrid() {
       ? galleryLayout(size.width, size.height, ordered.length)
       : null;
 
+  // `absolute inset-0` sizes the box from <main> only, never from the tiles inside it.
+  // Otherwise tile size -> box size -> measured size forms a loop and the grid grows past
+  // the screen (seen after opening/closing the participants panel).
   return (
     <div
       ref={boxRef}
-      className={`flex h-full w-full flex-wrap justify-center gap-2 overflow-x-hidden p-2 ${
+      className={`absolute inset-0 flex flex-wrap justify-center gap-2 overflow-x-hidden p-2 ${
         layout?.scroll ? "content-start overflow-y-auto" : "content-center overflow-y-hidden"
       }`}
     >
