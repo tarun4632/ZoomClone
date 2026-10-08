@@ -166,6 +166,7 @@ function DetailsView({ meeting, onStart }: { meeting: MeetingOwner; onStart: (me
 
         <dl className="divide-y divide-line px-5 py-2 sm:px-8 sm:py-3">
           <Row label="Topic">{meeting.title}</Row>
+          <Row label="Host">{meeting.is_host ? `${meeting.host_name} (you)` : meeting.host_name}</Row>
           {meeting.description && <Row label="Description">{meeting.description}</Row>}
           <Row label="Time">{describeTime(meeting)}</Row>
           <Row label="Duration">{meeting.duration_minutes ? formatDuration(meeting.duration_minutes) : "—"}</Row>

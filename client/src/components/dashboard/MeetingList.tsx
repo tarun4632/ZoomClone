@@ -63,16 +63,12 @@ function MeetingRow({
   eyebrow,
   badge,
   action,
-  linkToDetails = true,
 }: {
   meeting: MeetingOwner;
   eyebrow: ReactNode;
   badge?: ReactNode;
   action?: ReactNode;
-  /** Off for meetings the user only attended: the owner-only details page is not theirs. */
-  linkToDetails?: boolean;
 }) {
-  const titleClass = "mt-0.5 block truncate text-[15px] font-semibold text-ink";
   return (
     <li className="relative flex items-center gap-3 py-3.5">
       <div className="min-w-0 flex-1">
@@ -80,16 +76,14 @@ function MeetingRow({
           <span className="tabular-nums">{eyebrow}</span>
           {badge}
         </p>
-        {linkToDetails ? (
-          <Link
-            href={`/meetings/${meeting.meeting_number}`}
-            className={`${titleClass} outline-none transition-colors after:absolute after:-inset-x-2 after:inset-y-0.5 after:rounded-xl hover:text-zoom-blue focus-visible:after:ring-2 focus-visible:after:ring-zoom-blue`}
-          >
-            {meeting.title}
-          </Link>
-        ) : (
-          <p className={titleClass}>{meeting.title}</p>
-        )}
+        {/* Every row opens its details page, including meetings the user only attended
+            (that page then shows who hosted and has no Start button). */}
+        <Link
+          href={`/meetings/${meeting.meeting_number}`}
+          className="mt-0.5 block truncate text-[15px] font-semibold text-ink outline-none transition-colors after:absolute after:-inset-x-2 after:inset-y-0.5 after:rounded-xl hover:text-zoom-blue focus-visible:after:ring-2 focus-visible:after:ring-zoom-blue"
+        >
+          {meeting.title}
+        </Link>
         <p className="mt-0.5 text-[13px] text-ink-muted tabular-nums">
           Meeting ID: {formatMeetingNumber(meeting.meeting_number)}
         </p>
@@ -277,7 +271,6 @@ export function RecentList({
             key={`${m.meeting_number}-${m.ended_at}`}
             meeting={m}
             eyebrow={recentDate(m)}
-            linkToDetails={m.is_host}
           />
         ))}
       </ul>
