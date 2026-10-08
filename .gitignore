@@ -1,0 +1,35 @@
+# dependencies / builds
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# sqlite
+*.db
+*.db-wal
+*.db-shm
+
+# env (keep the examples)
+.env
+.env.*
+!.env.example
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# vercel / railway
+.vercel/
+.railway/

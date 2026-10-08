@@ -1,0 +1,16 @@
+import secrets
+import string
+
+
+def generate_meeting_number() -> str:
+    # 11 digits, never starting with 0. If the UNIQUE constraint fails,
+    # the caller rolls back the session and retries.
+    return secrets.choice("123456789") + "".join(secrets.choice(string.digits) for _ in range(10))
+
+
+def generate_passcode() -> str:
+    return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
+
+
+def generate_host_key() -> str:
+    return secrets.token_urlsafe(16)

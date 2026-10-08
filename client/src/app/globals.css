@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* Zoom palette. Refine by eyedropping screenshots of the real Zoom web app. */
+@theme {
+  --color-zoom-blue: #0b5cff;
+  --color-zoom-blue-hover: #0849d1;
+  --color-zoom-orange: #ff742e;
+  --color-zoom-orange-hover: #f05f17;
+  --color-zoom-danger: #e02828;
+  --color-zoom-danger-hover: #c41f1f;
+
+  /* Light-blue pill buttons ("Manage Plan", "Test Audio and Video" style in Zoom's web portal). */
+  --color-zoom-blue-soft: #edf3ff;
+  --color-zoom-blue-soft-hover: #dde8ff;
+
+  --color-ink: #131619;
+  --color-ink-muted: #6e7680;
+  --color-line: #e7e9ee;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f6f8;
+
+  /* Zoom web portal cards: white, ~16px radius, very soft shadow. */
+  --radius-card: 16px;
+  --shadow-card: 0 2px 14px rgba(19, 22, 25, 0.07);
+
+  --color-room-bg: #1a1a1a;
+  --color-room-tile: #2a2a2a;
+  --color-room-toolbar: #111111;
+  --color-room-panel: #242424;
+  --color-room-text: #f2f2f2;
+  --color-room-text-muted: #a0a0a0;
+  --color-speaking: #23d959;
+  --color-secure: #23d959;
+
+  --font-sans: var(--font-inter), "Segoe UI", Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-mono-face), monospace;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}

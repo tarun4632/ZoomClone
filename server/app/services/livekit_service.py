@@ -1,0 +1,96 @@
+"""The only module that talks to LiveKit.
+
+Routes get the service through the `get_livekit` dependency, so tests can override it
+with a fake. Names checked against livekit-api 1.2.1.
+"""
+
+import json
+import logging
+from datetime import timedelta
+
+import aiohttp
+from livekit import api
+
+from ..config import settings
+
+log = logging.getLogger(__name__)
+
+TOKEN_TTL = timedelta(hours=4)
+# Short timeout for best-effort calls made while serving the dashboard.
+LIST_ROOMS_TIMEOUT_SECONDS = 3.0
+DEFAULT_TIMEOUT_SECONDS = 10.0
+
+
+def is_not_found(exc: BaseException) -> bool:
+    """True for LiveKit's 'room/participant does not exist' error."""
+    return isinstance(exc, api.ServerError) and exc.code == api.ServerErrorCode.NOT_FOUND
+
+
+class LiveKitService:
+    def __init__(self, url: str, api_key: str, api_secret: str) -> None:
+        self.url = url
+        self.api_key = api_key
+        self.api_secret = api_secret
+
+    def _client(self, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> api.LiveKitAPI:
+        return api.LiveKitAPI(
+            self.url,
+            self.api_key,
+            self.api_secret,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        )
+
+    def create_token(self, room: str, identity: str, name: str, is_host: bool) -> str:
+        return (
+            api.AccessToken(self.api_key, self.api_secret)
+            .with_identity(identity)
+            .with_name(name)
+            # Other clients read this to show "(Host)" in the participants panel.
+            .with_metadata(json.dumps({"role": "host" if is_host else "attendee"}))
+            .with_grants(
+                api.VideoGrants(
+                    room_join=True,
+                    room=room,
+                    room_admin=is_host,
+                    can_publish=True,
+                    can_subscribe=True,
+                )
+            )
+            .with_ttl(TOKEN_TTL)
+            .to_jwt()
+        )
+
+    async def mute_all(self, room: str, host_identities: set[str]) -> None:
+        """Force-mute every published audio track except those of host identities."""
+        async with self._client() as lk:
+            res = await lk.room.list_participants(api.ListParticipantsRequest(room=room))
+            for p in res.participants:
+                if p.identity in host_identities:
+                    continue
+                for t in p.tracks:
+                    if t.type == api.TrackType.AUDIO and not t.muted:
+                        await lk.room.mute_published_track(
+                            api.MuteRoomTrackRequest(
+                                room=room, identity=p.identity, track_sid=t.sid, muted=True
+                            )
+                        )
+
+    async def remove_participant(self, room: str, identity: str) -> None:
+        async with self._client() as lk:
+            await lk.room.remove_participant(api.RoomParticipantIdentity(room=room, identity=identity))
+
+    async def end_room(self, room: str) -> None:
+        async with self._client() as lk:
+            await lk.room.delete_room(api.DeleteRoomRequest(room=room))
+
+    async def active_room_names(self) -> set[str]:
+        async with self._client(LIST_ROOMS_TIMEOUT_SECONDS) as lk:
+            res = await lk.room.list_rooms(api.ListRoomsRequest())
+            return {r.name for r in res.rooms}
+
+
+_service = LiveKitService(settings.LIVEKIT_URL, settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
+
+
+def get_livekit() -> LiveKitService:
+    return _service
