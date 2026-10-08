@@ -224,13 +224,3 @@ The client runs on Vercel (root directory `client`) and the server on Railway (r
 - **Only working controls are shown.** Zoom features this app does not have (chat, screen share, reactions, plans and billing, and so on) are left off the screen, not shown as dead buttons.
 - **Zoom's look is followed.** Layouts, colours and wording follow Zoom's web app and meeting window. The illustration on the sign-in page is drawn for this project.
 
-## Known limitations
-
-- **Removed participants can rejoin** with the same link. Nothing ties a guest to a device.
-- **No sign-in rate limiting, email verification or password reset.**
-- **The account token is kept in the browser's `localStorage`.** That is simple and works across the two origins, but script injected into the page could read it.
-- **Replacing a host who leaves without choosing takes a little while.** The meeting waits 20 seconds so that a refresh does not cost the host their role, and a crashed browser is only noticed once LiveKit gives up on its connection, so that case takes closer to a minute.
-- **An owner who gave the host role away is an ordinary attendee** when they return, and cannot end their own meeting unless the current host hands the role back.
-- **Mute All covers the people present** when it is clicked, not those who join later.
-- **No backups.** The data is one SQLite file on one volume.
-- **Not built:** chat, screen share, reactions, a waiting room with an admit list, recordings, editing or cancelling a scheduled meeting.
