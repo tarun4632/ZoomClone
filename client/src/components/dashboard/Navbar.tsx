@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarDays, Plus, Video, type LucideIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Spinner } from "@/components/ui/Spinner";
@@ -44,9 +45,9 @@ export function Navbar({ me, actions }: { me: User | null; actions: MeetingActio
         <Link
           href="/"
           aria-label="Zoom Clone home"
-          className="mr-auto shrink-0 rounded-md pb-1 text-[30px] leading-none font-extrabold tracking-[-0.045em] text-zoom-blue outline-none focus-visible:ring-2 focus-visible:ring-zoom-blue sm:text-[36px]"
+          className="mr-auto shrink-0 rounded-md p-1 text-zoom-blue outline-none focus-visible:ring-2 focus-visible:ring-zoom-blue"
         >
-          zoom
+          <Image src="/zoom-logo.png" alt="Zoom" width={178} height={41} loading="eager" className="h-6 w-auto sm:h-7" />
         </Link>
 
         <nav aria-label="Meeting actions" className="flex items-center md:gap-4 lg:gap-6">
