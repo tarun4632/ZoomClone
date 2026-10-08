@@ -1,10 +1,65 @@
 # Zoom Clone
 
-A browser video-meeting app modelled on Zoom: sign in, start an instant meeting, schedule one for later, or join by meeting ID or invite link. Audio and video are real, carried by LiveKit.
+A video-meeting web app modelled on Zoom. Sign in, start an instant meeting, schedule one for later, or join by meeting ID or invite link. Audio and video are real.
 
-- **`client/`** is the web app: Next.js (App Router), TypeScript and Tailwind.
-- **`server/`** is the API: FastAPI, SQLAlchemy and SQLite.
-- **LiveKit Cloud** carries the media. The server never touches audio or video. It decides who may join and in what role, then hands the browser a signed LiveKit token.
+**Live app:** https://zoomclone.tarunj.in
+
+To look around without signing up, choose **Demo account** on the sign-in page. It signs you in as a sample user with meetings already set up.
+
+| | |
+|---|---|
+| ![Dashboard with profile, quick actions, upcoming and recent meetings](docs/screenshots/dashboard.png) | ![Meeting room with four participants and the participants panel](docs/screenshots/meeting-room.png) |
+| Dashboard | Meeting room, as the host sees it (cameras off) |
+
+![Sign-in page](docs/screenshots/sign-in.png)
+
+## Contents
+
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [How it fits together](#how-it-fits-together)
+- [Run it locally](#run-it-locally)
+- [Project structure](#project-structure)
+- [Database](#database)
+- [How access works](#how-access-works)
+- [Tests and CI](#tests-and-ci)
+- [Deployment](#deployment)
+- [Assumptions](#assumptions)
+- [Known limitations](#known-limitations)
+
+## Features
+
+**Core**
+
+| Feature | What you get |
+|---|---|
+| **Dashboard** | New Meeting, Join and Schedule in the navbar and as tiles; a profile card with a live clock; Upcoming and Recent lists; an account menu with Profile, Settings and Sign out. |
+| **Instant meeting** | One click creates a meeting with a unique 11-digit ID, a passcode and an invite link, and takes you into it. |
+| **Join** | By meeting ID and passcode, or by invite link. You enter a display name first. Unknown IDs are rejected with "Invalid meeting ID". |
+| **Schedule** | Topic, description, date and time, duration and video defaults. The meeting is saved, listed under Upcoming, and has a details page with "Copy Invitation". |
+| **Meeting room** | Camera and mic preview before joining, a gallery grid, mute and video toggles, a participants panel, and meeting info with the invite link. |
+
+**Beyond the core**
+
+- **Accounts.** Sign up, sign in and sign out. Guests still join meetings without an account.
+- **Host controls.** Mute everyone, mute one person by clicking their microphone, remove someone, make someone else host, end the meeting for all.
+- **One host at a time.** A host who leaves picks who takes over ("Assign a new host"). If the host just closes the tab or their browser crashes, a successor is chosen automatically.
+- **Scheduled meetings start with their owner.** Someone who arrives early sees "Waiting for the host to start this meeting" and is let in automatically when it starts.
+- **Responsive.** Phone, tablet and desktop layouts, with light and dark mode.
+
+## Tech stack
+
+| Layer | Used |
+|---|---|
+| **Frontend** | Next.js 16 (App Router, single-page: every page is a client component), React 19, TypeScript, Tailwind CSS 4 |
+| **Calls in the browser** | `livekit-client` and the hooks from `@livekit/components-react`. Every visible control is this app's own. |
+| **Backend** | Python 3.14, FastAPI, SQLAlchemy 2, Pydantic 2 |
+| **Database** | SQLite (WAL mode) |
+| **Media** | LiveKit Cloud, a selective forwarding unit (SFU): it relays each person's audio and video to everyone else |
+| **Tests and CI** | pytest; TypeScript, ESLint and the production build; GitHub Actions |
+| **Hosting** | Vercel (client), Railway (server, with a volume for the database) |
+
+## How it fits together
 
 ```
  Browser (Next.js) ── REST ──▶ FastAPI ── admin API ──▶ LiveKit Cloud
@@ -13,16 +68,9 @@ A browser video-meeting app modelled on Zoom: sign in, start an instant meeting,
         └──────────── WebRTC audio and video ────────────────┘
 ```
 
-## What it does
+The server never touches audio or video. It decides who may join and in what role, then hands the browser a signed LiveKit token. The browser connects to LiveKit directly with that token.
 
-- **Accounts.** Sign up, sign in, sign out. A demo account with sample meetings is one click away on the sign-in page.
-- **Dashboard.** New Meeting, Join and Schedule, plus Upcoming and Recent lists. It has light and dark mode and works on a phone.
-- **Meetings.** Each has an 11-digit ID, a passcode and an invite link. Scheduled meetings have a details page with "Copy Invitation".
-- **Guests.** Anyone with an invite link, or the meeting ID and passcode, can join without an account.
-- **Scheduled meetings start with their owner.** Someone who arrives early sees "Waiting for the host to start this meeting" and is let in automatically when it starts.
-- **Meeting room.** Camera and mic preview before joining, a gallery grid, mute and video toggles, and a participants panel.
-- **Host controls.** Mute all, mute one person, remove someone, make someone else host, and end the meeting for everyone.
-- **One host at a time.** A host who leaves picks who takes over ("Assign a new host"), and does not get the role back by returning. If the host just closes the tab or drops off, the system picks a successor after a short wait.
+`PLAN.MD` covers the design in depth: the full schema, the meeting and host rules, every API route, and the reasoning behind them.
 
 ## Run it locally
 
@@ -41,6 +89,8 @@ uvicorn app.main:app --reload --port 8000
 
 Put your LiveKit project's URL, API key and API secret in `server/.env` (LiveKit Cloud → Settings → Keys). Without them the server still starts, and logs a warning, but nobody can connect to a call.
 
+The database file is created and filled with sample data the first time the server starts. The API's interactive documentation is at http://localhost:8000/docs.
+
 **2. Client**
 
 ```bash
@@ -50,9 +100,11 @@ copy .env.example .env.local      # macOS/Linux: cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000 and choose **Use the demo account**, or create your own.
+Open http://localhost:3000 and choose **Demo account**, or create your own.
 
-To try a call with two people on one machine, open the invite link in a private window. That second window is a guest.
+**3. Try a call**
+
+Start a meeting, open its invite link in a private window, and join there under another name. The private window is a guest, so you can see both sides: host controls in one, the attendee's view in the other.
 
 ### Settings
 
@@ -71,14 +123,76 @@ To try a call with two people on one machine, open the invite link in a private 
 
 The password is public on purpose, so anyone can try the app. The demo account always has a few upcoming meetings; new accounts start empty.
 
-## Tests
+## Project structure
+
+```
+client/                       Next.js app
+└── src/
+    ├── app/                  pages: login, dashboard, meetings/[number] (details),
+    │                         j/[number] (invite link), wc/[number] (pre-join and room)
+    ├── components/           auth/, dashboard/, meeting/, ui/
+    └── lib/                  api.ts (one function per endpoint), auth.ts, types.ts, helpers
+
+server/                       FastAPI app
+├── app/
+│   ├── routers/              auth.py, users.py, meetings.py   (thin: parse, call, respond)
+│   ├── services/             auth, meetings, LiveKit, ID generation   (the rules)
+│   ├── models.py             database tables
+│   ├── schemas.py            request and response shapes
+│   ├── database.py           engine, sessions, schema upgrades
+│   └── seed.py               sample users and meetings
+└── tests/
+
+.github/workflows/ci.yml      checks on every push and pull request
+PLAN.MD                       the design in depth
+```
+
+## Database
+
+Four tables, created and upgraded automatically on startup.
+
+| Table | Holds | Notes |
+|---|---|---|
+| `users` | Accounts | Unique email; the password as a salted scrypt hash. |
+| `auth_tokens` | One row per sign-in | Only the SHA-256 of the token, and when it expires. |
+| `meetings` | Instant and scheduled meetings | Belongs to a user (its owner). Unique 11-digit `meeting_number`, a passcode, a random `invite_token`, a status (`scheduled`, `live`, `ended`) and the schedule. |
+| `meeting_participants` | One row per join | Belongs to a meeting, and to a user if they were signed in (guests have none). Holds the display name, the current role (`host` or `attendee`), the status (`joined`, `left`, `removed`) and the join and leave times. |
+
+```
+users 1───* auth_tokens
+users 1───* meetings
+users 1───* meeting_participants   (optional: guests have no account)
+meetings 1───* meeting_participants
+```
+
+- Participants are separate from users so that guests can join, and so that rejoining is simply a new row. This table is what makes the Recent list possible, and it is where the host role lives.
+- Allowed values are enforced with CHECK constraints. Foreign keys are enforced too, so deleting a meeting removes its participant rows.
+- Times are stored in UTC and shown in the browser's time zone.
+
+## How access works
+
+There are three separate proofs, each for one job.
+
+| Proof | Who has it | What it allows |
+|---|---|---|
+| **Account token** | A signed-in user | The dashboard: listing, creating and viewing your own meetings. Starting a meeting you own, which makes you its first host. |
+| **Passcode or invite link** | Anyone the owner shared it with | Joining that meeting as an attendee. |
+| **Participant secret** | One participant, for one join | Leaving, and the host controls while that participant is currently the host. |
+
+- **Passwords** are stored as salted scrypt hashes.
+- **Account tokens** are random strings sent as `Authorization: Bearer …`. The server keeps only their SHA-256 hash, they last 30 days, and signing out revokes them.
+- **The invite link does not contain the passcode.** Its `?pwd=` value is a separate random token for that meeting. It lets the holder in, as the link is meant to, but the passcode cannot be worked out from it.
+- **Host powers follow the participant's current role**, not the account. That is what lets "Make Host" work for a guest, and what removes the powers from someone who hands the role over.
+- **Leaving needs the participant secret.** Participant IDs are visible to everyone in a call, so an ID alone must not be enough to make someone else "leave".
+
+## Tests and CI
 
 ```bash
 cd server
 pytest
 ```
 
-The tests cover the API with LiveKit replaced by a fake: meeting lifecycle, join rules, host controls, who may start a meeting, the one-host rule and host succession (including a host who vanishes without leaving), accounts, and upgrading an older database.
+26 tests cover the API with LiveKit replaced by a fake: creating and listing meetings, who may join and who may start, host controls, the one-host rule and host succession (including a host who vanishes without leaving), accounts, and upgrading an older database.
 
 ```bash
 cd client
@@ -89,32 +203,26 @@ The client has no unit tests. It is checked by the type checker, the linter, the
 
 Both sets of checks run on GitHub for every push to `main` and every pull request (`.github/workflows/ci.yml`). They report on a commit; they do not hold back a deploy.
 
-## How access works
-
-There are three separate proofs, each for one job.
-
-| Proof | Who has it | What it allows |
-|---|---|---|
-| **Account token** | A signed-in user | The dashboard: listing, creating and viewing your own meetings. Starting a meeting you own, which makes you its first host. |
-| **Passcode or invite link** | Anyone the host shared it with | Joining that meeting as an attendee. |
-| **Participant secret** | One participant, for one join | Leaving, and the host controls while that participant is currently a host. |
-
-Some details worth knowing:
-
-- **Passwords** are stored as salted scrypt hashes.
-- **Account tokens** are random strings sent as `Authorization: Bearer …`. The server keeps only their SHA-256 hash, they last 30 days, and signing out revokes them.
-- **The invite link does not contain the passcode.** Its `?pwd=` value is a separate random token for that meeting. It lets the holder in, as the link is meant to, but the passcode cannot be worked out from it.
-- **Host powers follow the participant's current role**, not the account. That is what lets "Make Host" work for a guest, and what removes the powers from someone who hands the role over.
-- **Leaving needs the participant secret.** Participant IDs are visible to everyone in a call, so an ID alone must not be enough to make someone else "leave".
-
 ## Deployment
 
-The client is built for Vercel (root directory `client`) and the server for Railway (root directory `server`, with a volume for the SQLite file). See `server/railway.json` and `server/Procfile`.
+The client runs on Vercel (root directory `client`) and the server on Railway (root directory `server`, with a volume for the SQLite file). Both redeploy on every push to `main`.
 
 - Set `NEXT_PUBLIC_API_URL` on Vercel before building.
-- Set `CLIENT_ORIGIN` on Railway to the client's URL.
+- On Railway, set the three LiveKit variables, `CLIENT_ORIGIN` to the client's URL, and `DATABASE_URL` to a path on the volume.
 - Run **one** server process. SQLite and the route design both assume it.
-- The database upgrades itself on start (`migrate()` in `server/app/database.py`).
+- The database upgrades itself on start and is never rebuilt, so data survives redeploys.
+
+## Assumptions
+
+- **"Assume a default user is logged in."** Login and signup are built (the brief lists them as a bonus), so the dashboard asks you to sign in. The demo account is the default user, one click from the sign-in page, and it comes with sample data.
+- **Guests need no account.** Anyone with an invite link, or the meeting ID and passcode, can join.
+- **Every meeting has a passcode,** generated with the meeting. The invite link lets you in without typing it.
+- **Who can start a meeting.** Only its owner can start a scheduled meeting. An instant meeting can be opened by anyone who has its link.
+- **When a meeting ends.** When the host ends it for everyone, or when the last person leaves. Its owner can start it again.
+- **One host at a time,** as in Zoom without co-hosts. The role can be handed to anyone in the meeting, including a guest.
+- **Media goes through LiveKit Cloud.** Building a media server was out of scope; the app's own logic is meetings, permissions and host controls.
+- **Only working controls are shown.** Zoom features this app does not have (chat, screen share, reactions, plans and billing, and so on) are left off the screen, not shown as dead buttons.
+- **Zoom's look is followed.** Layouts, colours and wording follow Zoom's web app and meeting window. The illustration on the sign-in page is drawn for this project.
 
 ## Known limitations
 
@@ -123,7 +231,6 @@ The client is built for Vercel (root directory `client`) and the server for Rail
 - **The account token is kept in the browser's `localStorage`.** That is simple and works across the two origins, but script injected into the page could read it.
 - **Replacing a host who leaves without choosing takes a little while.** The meeting waits 20 seconds so that a refresh does not cost the host their role, and a crashed browser is only noticed once LiveKit gives up on its connection, so that case takes closer to a minute.
 - **An owner who gave the host role away is an ordinary attendee** when they return, and cannot end their own meeting unless the current host hands the role back.
-- **Instant meetings can be opened by anyone with the link** before their owner arrives (scheduled ones cannot). Nobody is host until the owner joins.
-- **Not built:** chat, screen share, waiting room, recordings, editing or cancelling a scheduled meeting.
-
-`PLAN.MD` describes the design in depth: schema, rules, API and the reasoning behind them.
+- **Mute All covers the people present** when it is clicked, not those who join later.
+- **No backups.** The data is one SQLite file on one volume.
+- **Not built:** chat, screen share, reactions, a waiting room with an admit list, recordings, editing or cancelling a scheduled meeting.
