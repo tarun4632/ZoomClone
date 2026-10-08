@@ -44,7 +44,7 @@ class FakeLiveKit:
         self.role_updates: list[tuple[str, str, str]] = []
         # Set to an exception to make set_participant_role fail for that identity.
         self.fail_role_update_for: dict[str, Exception] = {}
-        # Set to an exception to make end_room / participant_identities fail.
+        # Set to an exception to make end_room / participant_roles fail.
         self.fail_end_room: Exception | None = None
         self.fail_list_participants: Exception | None = None
 
@@ -73,13 +73,10 @@ class FakeLiveKit:
         self.removed.append((room, identity))
         self.rooms.get(room, set()).discard(identity)
 
-    async def participant_identities(self, room: str) -> set[str]:
+    async def participant_roles(self, room: str) -> dict[str, str | None]:
         if self.fail_list_participants is not None:
             raise self.fail_list_participants
-        return set(self.rooms.get(room, set()))
-
-    async def participant_roles(self, room: str) -> dict[str, str | None]:
-        return {i: self.roles.get(i) for i in await self.participant_identities(room)}
+        return {i: self.roles.get(i) for i in self.rooms.get(room, set())}
 
     async def end_room(self, room: str) -> None:
         if self.fail_end_room is not None:

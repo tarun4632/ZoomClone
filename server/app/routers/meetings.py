@@ -6,8 +6,11 @@ inline is fine.
 
 Authorization:
 - The dashboard routes (lists, create, details) need a signed-in user (bearer token).
-- Public info and join also work for guests. A signed-in caller who owns the meeting joins
-  as host; everyone else needs the passcode or the invite link's token.
+- Public info and join also work for guests. The meeting's owner needs no passcode; everyone
+  else needs the passcode or the invite link's token. Only the owner can start a scheduled
+  meeting (409 for others until it is live).
+- There is one host at a time. It is the owner unless the role has passed to someone else
+  (Make Host, or automatic succession after the host left without choosing).
 - Leave takes the caller's own `participant_secret`, so nobody can "leave" someone else.
 - Sync takes the caller's own credentials too. It only records what LiveKit reports about who
   is connected, so any participant may ask for it; it gives the caller no say in the outcome.
@@ -107,7 +110,17 @@ async def join_meeting(
     lk: LiveKitService = Depends(get_livekit),
 ) -> JoinResponse:
     meeting = svc.get_meeting_or_404(db, number)
-    return svc.join(db, meeting, data, user, lk, utcnow())
+    response, superseded = svc.join(db, meeting, data, user, lk, utcnow())
+    # The owner's earlier session (another tab, or one that died) gave the host role to this
+    # one. Tell LiveKit, so that tab loses its "(Host)" label and controls. Best effort: the
+    # database row is the authority, and a dead tab is not in the room to be told.
+    for earlier in superseded:
+        try:
+            await lk.set_participant_role(meeting.id, earlier.identity, "attendee")
+        except Exception as exc:  # noqa: BLE001
+            if not is_not_found(exc):
+                log.warning("could not clear host metadata for %s: %r", earlier.identity, exc)
+    return response
 
 
 @router.post(
@@ -116,11 +129,7 @@ async def join_meeting(
     response_class=Response,
 )
 async def leave_meeting(
-    number: str,
-    identity: str,
-    request: Request,
-    db: Session = Depends(get_db),
-    lk: LiveKitService = Depends(get_livekit),
+    number: str, identity: str, request: Request, db: Session = Depends(get_db)
 ) -> Response:
     # The body is form-encoded (`participant_secret=...`), not JSON: that is a content type
     # navigator.sendBeacon may send cross-origin without a CORS preflight, which matters
@@ -130,24 +139,9 @@ async def leave_meeting(
 
     meeting = svc.get_meeting_or_404(db, number)
     participant = svc.require_own_participant(db, meeting, identity, secret)
-
-    # Only when a successor is needed: ask LiveKit who is really connected. Best effort.
-    present: set[str] | None = None
-    if svc.is_last_host(db, meeting, participant):
-        try:
-            present = await lk.participant_identities(meeting.id)
-        except Exception as exc:  # noqa: BLE001 - leaving must never fail over LiveKit
-            if not is_not_found(exc):
-                log.warning("could not list participants of %s: %r", meeting.id, exc)
-
-    new_host = svc.leave(db, meeting, participant, utcnow(), present)
-    if new_host is not None:
-        # The database row is the authority; the metadata only moves the "(Host)" label and
-        # the host controls in the new host's browser.
-        try:
-            await lk.set_participant_role(meeting.id, new_host.identity, "host")
-        except Exception as exc:  # noqa: BLE001
-            log.warning("could not set host metadata for %s: %r", new_host.identity, exc)
+    # No successor is picked here. A host who clicks Leave has already made someone else
+    # host; one who just closes the tab is replaced by /sync after a short grace.
+    svc.leave(db, meeting, participant, utcnow())
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

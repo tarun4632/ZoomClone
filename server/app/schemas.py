@@ -88,13 +88,15 @@ class MeetingPublic(BaseModel):
     status: MeetingStatus
     host_video_on: bool
     participant_video_on: bool
-    # True when the request carries the bearer token of this meeting's host.
+    # True when the request carries the bearer token of this meeting's owner (who created it).
+    # Their role inside the meeting can differ: see JoinResponse.role.
     is_host: bool
+    # Shown to someone waiting for the host to start a scheduled meeting.
+    scheduled_start_at: UTCDatetime | None
 
 
 class MeetingOwner(MeetingPublic):
     description: str | None
-    scheduled_start_at: UTCDatetime | None
     duration_minutes: int | None
     started_at: UTCDatetime | None
     ended_at: UTCDatetime | None

@@ -42,7 +42,13 @@ STALE_GRACE = timedelta(minutes=2)
 # Gap between /join and that browser showing up in the LiveKit room. A row this new is never
 # treated as "dropped without leaving", even if LiveKit doesn't list it yet.
 CONNECT_GRACE = timedelta(seconds=30)
+# How long a meeting waits for a host who left without naming a successor (closed the tab,
+# refreshed, lost the network) before the system picks one. Long enough to reload the page
+# and click Join again, so a refresh does not cost the host their role.
+HOST_RETURN_GRACE = timedelta(seconds=20)
 RECENT_LIMIT = 50
+# 409 on /join. The client shows a waiting screen and joins once the meeting is live.
+NOT_STARTED_DETAIL = "The host has not started this meeting yet"
 
 
 # ---------- views ----------
@@ -67,6 +73,7 @@ def to_public(meeting: Meeting, user: User | None) -> MeetingPublic:
         host_video_on=meeting.host_video_on,
         participant_video_on=meeting.participant_video_on,
         is_host=is_host_user(meeting, user),
+        scheduled_start_at=meeting.scheduled_start_at,
     )
 
 
@@ -74,7 +81,6 @@ def to_owner(meeting: Meeting, user: User) -> MeetingOwner:
     return MeetingOwner(
         **to_public(meeting, user).model_dump(),
         description=meeting.description,
-        scheduled_start_at=meeting.scheduled_start_at,
         duration_minutes=meeting.duration_minutes,
         started_at=meeting.started_at,
         ended_at=meeting.ended_at,
@@ -305,23 +311,42 @@ def join(
     user: User | None,
     lk: LiveKitService,
     now: datetime,
-) -> JoinResponse:
+) -> tuple[JoinResponse, list[MeetingParticipant]]:
     """`user` is the signed-in caller, or None for a guest.
 
-    The meeting's own host is recognised by their account and needs no passcode. Everyone
-    else is an attendee and must send the passcode or the invite link's token.
+    The meeting's owner is recognised by their account and needs no passcode. Everyone else
+    must send the passcode or the invite link's token.
+
+    Who may start a meeting that is not live:
+    - a scheduled meeting: only its owner. Anyone else gets 409 ("not started yet") and
+      waits; once the scheduled time is over and it has ended, 410.
+    - an instant meeting: anyone with the passcode or link the first time; once it has
+      ended, only its owner (410 for everyone else).
+
+    The role: there is one host at a time. The owner is host when no one else holds the role
+    (they start the meeting, or come back before a successor took over). If the role has
+    passed to someone else, the owner joins as an attendee like anybody. An earlier session of
+    the owner's own that still holds the role (a second tab, or a tab that died) hands it to
+    this one. Returns the response and those superseded rows, whose LiveKit metadata the
+    caller sets to "attendee".
     """
-    is_host = is_host_user(meeting, user)
-    if not is_host and not (
+    is_owner = is_host_user(meeting, user)
+    if not is_owner and not (
         _matches(data.passcode, meeting.passcode)
         or _matches(data.invite_token, meeting.invite_token)
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid meeting passcode")
 
-    if meeting.status == "ended":
-        window_open = meeting.window_end is not None and meeting.window_end > now
-        if not (is_host or (meeting.meeting_type == "scheduled" and window_open)):
+    if meeting.status != "live" and not is_owner:
+        if meeting.meeting_type == "scheduled":
+            window_open = meeting.window_end is not None and meeting.window_end > now
+            if meeting.status == "scheduled" or window_open:
+                raise HTTPException(status.HTTP_409_CONFLICT, NOT_STARTED_DETAIL)
             raise HTTPException(status.HTTP_410_GONE, "This meeting has ended")
+        if meeting.status == "ended":
+            raise HTTPException(status.HTTP_410_GONE, "This meeting has ended")
+
+    if meeting.status == "ended":
         # Restart.
         meeting.status = "live"
         meeting.started_at = now
@@ -330,6 +355,16 @@ def join(
         # First join of a scheduled meeting or a new instant meeting.
         meeting.status = "live"
         meeting.started_at = now
+
+    is_host = False
+    superseded: list[MeetingParticipant] = []
+    if is_owner:
+        hosts = [p for p in _joined(db, meeting) if p.role == "host"]
+        if all(p.user_id == user.id for p in hosts):  # nobody, or only the owner's own sessions
+            is_host = True
+            for earlier in hosts:
+                earlier.role = "attendee"
+            superseded = hosts
 
     identity = str(uuid.uuid4())
     secret = generate_participant_secret()
@@ -348,7 +383,7 @@ def join(
     )
     db.commit()
 
-    return JoinResponse(
+    response = JoinResponse(
         identity=identity,
         role="host" if is_host else "attendee",
         token=lk.create_token(meeting.id, identity, data.display_name, is_host),
@@ -359,6 +394,7 @@ def join(
         invite_url=invite_url(meeting),
         participant_secret=secret,
     )
+    return response, superseded
 
 
 def check_can_become_host(target: MeetingParticipant) -> None:
@@ -377,63 +413,35 @@ def hand_over_host(
     db.commit()
 
 
-def is_last_host(db: Session, meeting: Meeting, participant: MeetingParticipant) -> bool:
-    """True if this participant leaving would leave other people in the meeting with no host."""
-    if participant.status != "joined" or participant.role != "host":
-        return False
-    others = [p for p in _joined(db, meeting) if p.id != participant.id]
-    return bool(others) and not any(p.role == "host" for p in others)
-
-
-def leave(
-    db: Session,
-    meeting: Meeting,
-    participant: MeetingParticipant,
-    now: datetime,
-    present: set[str] | None = None,
-) -> MeetingParticipant | None:
+def leave(db: Session, meeting: Meeting, participant: MeetingParticipant, now: datetime) -> None:
     """Idempotent. Never overwrites 'removed'. Ends the meeting when nobody is left.
 
-    Host succession: if the last host leaves while others remain, the participant who has
-    been in the meeting longest becomes host, so a meeting is never left without one.
-    `present` is the set of identities connected to the LiveKit room right now (None if
-    unknown); someone actually connected is preferred over a row whose browser may have
-    crashed without sending a leave. Returns the new host, or None. The caller updates that
-    participant's LiveKit metadata.
+    A host who leaves keeps "host" on their (now closed) row: that is the record that the
+    meeting had a host, and when they went. It does not pick a successor. A host who clicks
+    Leave has already handed the role over (Make Host); one who just closes the tab is
+    replaced by `reconcile`, after HOST_RETURN_GRACE.
     """
-    # The caller may have awaited LiveKit since loading these; read the current state.
     db.refresh(participant)
     db.refresh(meeting)
     if participant.status != "joined":
-        return None
-    was_host = participant.role == "host"
+        return
     participant.status = "left"
     participant.left_at = now
     db.flush()
-
-    promoted: MeetingParticipant | None = None
-    remaining = _joined(db, meeting)
-    if not remaining:
-        if meeting.status == "live":
-            _end_meeting(db, meeting, now)
-    elif was_host:
-        promoted = _promote_if_hostless(remaining, present)
+    if meeting.status == "live" and not _joined(db, meeting):
+        _end_meeting(db, meeting, now)
     db.commit()
-    return promoted
 
 
-def _promote_if_hostless(
-    remaining: list[MeetingParticipant], present: set[str] | None
-) -> MeetingParticipant | None:
-    """If nobody in `remaining` (longest-present first) is a host, make one of them host:
-    the first who is connected to LiveKit, else simply the first. Caller commits.
+def _pick_successor(
+    joined: list[MeetingParticipant], present: dict[str, str | None], owner_id: int
+) -> MeetingParticipant:
+    """Who takes over when the system has to choose: someone connected to LiveKit if anyone
+    is; among those the meeting's owner if they are in the call, else whoever has been in
+    the meeting longest (`joined` is in that order).
     """
-    if not remaining or any(p.role == "host" for p in remaining):
-        return None
-    connected = [p for p in remaining if present is not None and p.identity in present]
-    promoted = (connected or remaining)[0]
-    promoted.role = "host"
-    return promoted
+    candidates = [p for p in joined if p.identity in present] or joined
+    return next((p for p in candidates if p.user_id == owner_id), candidates[0])
 
 
 def reconcile(
@@ -443,51 +451,65 @@ def reconcile(
     present: dict[str, str | None],
     now: datetime,
 ) -> list[MeetingParticipant]:
-    """Bring the participant rows in line with who is really connected to the LiveKit room.
+    """Bring the participant rows in line with who is really connected to the LiveKit room,
+    and keep the meeting at exactly one host.
 
-    This is what replaces a host who vanished: a crashed browser or a lost network sends no
-    leave, so the row would stay "joined" and "host" forever. The people still in the call
-    ask for this check when LiveKit tells them a host dropped.
+    The people in the call ask for this when a host drops out and while no host is visible.
+    It covers what leave can't: a crashed browser or a lost network sends no leave, so the
+    row would stay "joined" (and "host") forever.
 
-    - A joined row LiveKit no longer lists has left, and gives up the host role. Rows newer
-      than CONNECT_GRACE are spared: that browser may still be connecting.
+    - A joined row LiveKit no longer lists has left. Rows newer than CONNECT_GRACE are
+      spared: that browser may still be connecting.
     - A row marked left that LiveKit lists again has come back (its connection recovered
-      after it was written off). It rejoins with the role it has now, i.e. as an attendee.
-    - If that leaves nobody as host, the longest-present connected participant becomes host.
+      after it was written off).
+    - More than one host (someone came back to find a successor in place): one keeps the
+      role, preferring whoever did not just return; the rest become attendees.
+    - No host: if this session of the meeting had one and they have been gone for
+      HOST_RETURN_GRACE, a successor is picked. If it never had one (an instant meeting a
+      guest opened before its owner arrived), nobody is promoted: the owner is host when
+      they join.
 
     `present` maps each identity connected to the LiveKit room to the role in its LiveKit
     metadata. Does nothing unless the caller is among them: the check is only trusted from
     inside the room. Returns the connected participants whose metadata disagrees with their
-    row (a new host, someone who came back, or an earlier update that failed); the caller
-    sets their metadata to the row's role, so labels and controls heal themselves.
+    row (a new host, a demoted one, or an earlier update that failed); the caller sets their
+    metadata to the row's role, so labels and controls heal themselves.
     """
     # The caller awaited LiveKit before this; drop anything loaded earlier in the request.
     db.expire_all()
     if meeting.status != "live" or caller_identity not in present:
         return []
 
-    rows = list(
-        db.scalars(
-            select(MeetingParticipant)
-            .where(
-                MeetingParticipant.meeting_id == meeting.id,
-                MeetingParticipant.status.in_(("joined", "left")),  # never revive 'removed'
-            )
-            .order_by(MeetingParticipant.joined_at, MeetingParticipant.id)
-        )
-    )
+    # This session only: rows from before a restart belong to a meeting that already ended.
+    query = select(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting.id)
+    if meeting.started_at is not None:
+        query = query.where(MeetingParticipant.joined_at >= meeting.started_at)
+    rows = list(db.scalars(query.order_by(MeetingParticipant.joined_at, MeetingParticipant.id)))
+
+    returned: set[int] = set()
     for row in rows:
         if row.status == "joined" and row.identity not in present:
             if row.joined_at <= now - CONNECT_GRACE:
                 row.status = "left"
                 row.left_at = now
-                row.role = "attendee"
-        elif row.status == "left" and row.identity in present:
+        elif row.status == "left" and row.identity in present:  # never revives 'removed'
             row.status = "joined"
             row.left_at = None
+            returned.add(row.id)
 
     joined = [r for r in rows if r.status == "joined"]
-    _promote_if_hostless(joined, set(present))
+    hosts = [r for r in joined if r.role == "host"]
+    if len(hosts) > 1:
+        # sorted() is stable, so among equals the longest-present host keeps the role.
+        keeper = sorted(hosts, key=lambda r: (r.id in returned, r.identity not in present))[0]
+        for extra in hosts:
+            if extra is not keeper:
+                extra.role = "attendee"
+    elif not hosts and joined:
+        departures = [r.left_at for r in rows if r.role == "host" and r.left_at is not None]
+        if departures and max(departures) <= now - HOST_RETURN_GRACE:
+            _pick_successor(joined, present, meeting.host_id).role = "host"
+
     db.commit()
     return [r for r in joined if r.identity in present and present[r.identity] != r.role]
 

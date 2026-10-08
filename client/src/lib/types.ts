@@ -42,18 +42,23 @@ export interface MeetingPublic {
   status: MeetingStatus;
   host_video_on: boolean;
   participant_video_on: boolean;
-  /** True when the request was made by the signed-in host of this meeting. */
+  /**
+   * True when the request was made by the signed-in owner of this meeting (who created it).
+   * Their role inside the meeting can differ: it is in JoinResponse.role, and live in
+   * LiveKit metadata, because the host role can pass to someone else.
+   */
   is_host: boolean;
+  /** Start time of a scheduled meeting; null for an instant one. */
+  scheduled_start_at: string | null;
 }
 
 /**
  * Owner view, for signed-in users. Returned by GET /meetings (list items),
  * GET /meetings/{number}/details, POST /meetings/instant and POST /meetings.
- * `is_host` is false for meetings the user attended but did not host (they appear in Recent).
+ * `is_host` is false for meetings the user attended but does not own (they appear in Recent).
  */
 export interface MeetingOwner extends MeetingPublic {
   description: string | null;
-  scheduled_start_at: string | null;
   duration_minutes: number | null;
   started_at: string | null;
   ended_at: string | null;
@@ -76,8 +81,10 @@ export interface ScheduleMeetingInput {
 }
 
 /**
- * POST /meetings/{number}/join. The meeting's signed-in host needs only a name. Anyone else
+ * POST /meetings/{number}/join. The meeting's signed-in owner needs only a name. Anyone else
  * sends the passcode (typed) or the invite link's ?pwd= token.
+ * 409 means a scheduled meeting its owner has not started yet: wait and try again once
+ * GET /meetings/{number} says "live". 410 means it has ended.
  */
 export interface JoinInput {
   display_name: string;

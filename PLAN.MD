@@ -11,11 +11,17 @@ The rest of this document is the original plan. These decisions have since repla
 - **Sign-in screens and account menu follow Zoom's.** `/login` has Zoom's layout (top bar that switches between Sign In and Sign Up, illustrated panel, one short form; sign-up is email first, then name and password). The navbar avatar opens Zoom's menu with only what exists here: Profile (read-only), Settings (light/dark) and Sign out. Left out because nothing is behind them: birth year, SSO and social sign-in, Support, language, plans and billing, help, switch account, the upgrade card.
 - **The invite link no longer contains the passcode.** `?pwd=` is a random per-meeting `invite_token`. `/join` accepts `passcode` (typed) or `invite_token` (from the link).
 - **Leave is authenticated.** The leave request carries the participant's own `participant_secret` as a form-encoded body, which `sendBeacon` can still send without a CORS preflight. Before, anyone who could see an identity could make that participant "leave".
-- **Host succession.** When the last host leaves and others remain, the participant who has been in the meeting longest becomes host (preferring someone LiveKit reports as connected).
-  - **A host who vanishes** (crash, lost network) sends no leave. `POST /meetings/{number}/sync`, called by the clients still in the room when a host drops out or no host is visible, compares the participant rows with LiveKit's list: missing people are marked left, a successor is promoted, and role metadata that disagrees with the database is corrected.
+- **One host at a time.** The owner is host when nobody else holds the role. Otherwise the role only moves, it is never copied:
+  - **Leaving host assigns a successor.** "Leave Meeting" opens Zoom's "Assign a new host" box; the client calls Make Host, then leave. Alone in the meeting, leaving simply ends it.
+  - **The role does not come back.** An owner who rejoins while someone else is host joins as an attendee. Only the owner's own earlier session (second tab, dead tab) is superseded by a new one.
+  - **Host leaves without choosing** (tab closed, refresh, crash): nobody is promoted for `HOST_RETURN_GRACE` (20 s), so a quick return keeps the role. After that `POST /meetings/{number}/sync` picks a successor: someone connected, the owner if present, else the longest-present.
+  - **`/sync`** is called by the clients in the room when a host drops out and while no host is visible. It compares the participant rows with LiveKit's list (missing people are marked left, returners rejoin), reduces several hosts to one, and corrects role metadata that disagrees with the database.
+  - **A meeting that never had a host gets none by default.** An instant meeting opened by a guest before its owner arrives stays hostless until the owner joins.
+- **Only the owner can start a scheduled meeting.** This reverses "anyone with the link can start it" for scheduled meetings. Others get 409 on `/join` until it is live, and the pre-join screen waits and joins automatically. After everyone leaves, others wait again (410 once the scheduled time is over). Instant meetings keep the old rule.
+- **Browser Back to a meeting you left** shows a fresh pre-join screen. Next.js keeps the hidden page's state, which was a dead room; `/wc/[number]` now resets itself when hidden.
 - **End meeting** returns 502 and changes nothing if LiveKit cannot delete the room.
 - **LiveKit tokens** no longer carry `room_admin`; every host action goes through the server.
-- **Tests:** 21 (meetings, leave authorization, host succession, vanished hosts, accounts, database upgrade).
+- **Tests:** 26 (meetings, who may start, leave authorization, the one-host rule, succession, vanished hosts, accounts, database upgrade).
 
 ---
 

@@ -19,9 +19,10 @@ A browser video-meeting app modelled on Zoom: sign in, start an instant meeting,
 - **Dashboard.** New Meeting, Join and Schedule, plus Upcoming and Recent lists. It has light and dark mode and works on a phone.
 - **Meetings.** Each has an 11-digit ID, a passcode and an invite link. Scheduled meetings have a details page with "Copy Invitation".
 - **Guests.** Anyone with an invite link, or the meeting ID and passcode, can join without an account.
+- **Scheduled meetings start with their owner.** Someone who arrives early sees "Waiting for the host to start this meeting" and is let in automatically when it starts.
 - **Meeting room.** Camera and mic preview before joining, a gallery grid, mute and video toggles, and a participants panel.
 - **Host controls.** Mute all, mute one person, remove someone, make someone else host, and end the meeting for everyone.
-- **A meeting always has a host.** If the last host leaves, closes the tab, or simply drops off (a crash or lost network), the participant who has been in the meeting longest becomes host.
+- **One host at a time.** A host who leaves picks who takes over ("Assign a new host"), and does not get the role back by returning. If the host just closes the tab or drops off, the system picks a successor after a short wait.
 
 ## Run it locally
 
@@ -77,7 +78,7 @@ cd server
 pytest
 ```
 
-The tests cover the API with LiveKit replaced by a fake: meeting lifecycle, join rules, host controls, host succession (including a host who vanishes without leaving), accounts, and upgrading an older database.
+The tests cover the API with LiveKit replaced by a fake: meeting lifecycle, join rules, host controls, who may start a meeting, the one-host rule and host succession (including a host who vanishes without leaving), accounts, and upgrading an older database.
 
 ```bash
 cd client
@@ -94,7 +95,7 @@ There are three separate proofs, each for one job.
 
 | Proof | Who has it | What it allows |
 |---|---|---|
-| **Account token** | A signed-in user | The dashboard: listing, creating and viewing your own meetings. Joining a meeting you own makes you its host. |
+| **Account token** | A signed-in user | The dashboard: listing, creating and viewing your own meetings. Starting a meeting you own, which makes you its first host. |
 | **Passcode or invite link** | Anyone the host shared it with | Joining that meeting as an attendee. |
 | **Participant secret** | One participant, for one join | Leaving, and the host controls while that participant is currently a host. |
 
@@ -120,8 +121,9 @@ The client is built for Vercel (root directory `client`) and the server for Rail
 - **Removed participants can rejoin** with the same link. Nothing ties a guest to a device.
 - **No sign-in rate limiting, email verification or password reset.**
 - **The account token is kept in the browser's `localStorage`.** That is simple and works across the two origins, but script injected into the page could read it.
-- **Replacing a host who drops off takes about half a minute.** A crashed browser sends no leave, so the takeover waits for LiveKit to notice the lost connection. A host who comes back after being replaced returns as an attendee; the meeting's owner can get the role back by rejoining.
-- **After the original host returns** to a meeting whose host role moved on, there are two hosts.
+- **Replacing a host who leaves without choosing takes a little while.** The meeting waits 20 seconds so that a refresh does not cost the host their role, and a crashed browser is only noticed once LiveKit gives up on its connection, so that case takes closer to a minute.
+- **An owner who gave the host role away is an ordinary attendee** when they return, and cannot end their own meeting unless the current host hands the role back.
+- **Instant meetings can be opened by anyone with the link** before their owner arrives (scheduled ones cannot). Nobody is host until the owner joins.
 - **Not built:** chat, screen share, waiting room, recordings, editing or cancelling a scheduled meeting.
 
 `PLAN.MD` is the original design document. Its first section lists what has changed since it was written.

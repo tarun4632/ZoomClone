@@ -112,12 +112,6 @@ class LiveKitService:
                 )
             )
 
-    async def participant_identities(self, room: str) -> set[str]:
-        """Identities connected to the room right now."""
-        async with self._client() as lk:
-            res = await lk.room.list_participants(api.ListParticipantsRequest(room=room))
-            return {p.identity for p in res.participants}
-
     async def participant_roles(self, room: str) -> dict[str, str | None]:
         """Everyone connected to the room right now, with the role in their metadata
         (None if the metadata carries no role)."""

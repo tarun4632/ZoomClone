@@ -27,7 +27,7 @@ import { DisconnectedScreen, type DisconnectKind } from "./DisconnectedScreen";
 import { useRealUnmount } from "./hooks";
 import { LeaveMenu } from "./LeaveMenu";
 import { MeetingInfo } from "./MeetingInfo";
-import { parseRole } from "./participant";
+import { parseRole, participantName } from "./participant";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { Toolbar } from "./Toolbar";
 import type { MeetingSession } from "./types";
@@ -200,6 +200,16 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
     router.push("/");
   }, [room, meetingNumber, session, router, stopPageHide]);
 
+  // A host who leaves hands the role over first, so the meeting is never without a host and
+  // nobody has to guess a successor. If the hand-over fails this rejects and we stay put.
+  const assignAndLeave = useCallback(
+    async (target: string) => {
+      await api.makeHost(meetingNumber, target, credentials(session));
+      await leave();
+    },
+    [meetingNumber, session, leave],
+  );
+
   if (ended) return <DisconnectedScreen kind={ended} />;
 
   return (
@@ -210,6 +220,7 @@ export function MeetingRoom({ meetingNumber, session }: MeetingRoomProps) {
         session={session}
         connected={connected}
         onLeave={leave}
+        onAssignAndLeave={assignAndLeave}
         onEndForAll={async () => {
           leavingRef.current = true;
           try {
@@ -233,11 +244,12 @@ interface RoomStageProps {
   session: MeetingSession;
   connected: boolean;
   onLeave: () => Promise<void>;
+  onAssignAndLeave: (identity: string) => Promise<void>;
   onEndForAll: () => Promise<void>;
 }
 
 /** The visible meeting window; lives inside the room context. */
-function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: RoomStageProps) {
+function RoomStage({ meetingNumber, session, connected, onLeave, onAssignAndLeave, onEndForAll }: RoomStageProps) {
   const room = useRoomContext();
   const participants = useParticipants();
   const { canPlayAudio, startAudio } = useAudioPlayback();
@@ -252,14 +264,16 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
     noticeTimer.current = window.setTimeout(() => setNotice(null), 4000);
   }, []);
 
-  // "You are now the host" when the server hands us the role (Make Host by the previous host).
-  // The handing-over side shows "{name} is now the host" from the participants panel.
+  // Tell everyone when the host role moves (Make Host, "Assign and leave", or the system
+  // replacing a host who left): the server rewrites the LiveKit metadata of those involved.
   useEffect(() => {
     const onMetadata = (prev: string | undefined, participant: RemoteParticipant | LocalParticipant) => {
-      if (!participant.isLocal || !prev) return; // `!prev`: the first metadata on connect
-      if (parseRole(prev) !== "host" && parseRole(participant.metadata) === "host") {
-        showNotice("You are now the host");
-      }
+      if (!prev) return; // the first metadata on connect is not a change
+      const wasHost = parseRole(prev) === "host";
+      const isNowHost = parseRole(participant.metadata) === "host";
+      if (wasHost === isNowHost) return;
+      if (participant.isLocal) showNotice(isNowHost ? "You are now the host" : "You are no longer the host");
+      else if (isNowHost) showNotice(`${participantName(participant.name, participant)} is now the host`);
     };
     room.on(RoomEvent.ParticipantMetadataChanged, onMetadata);
     return () => {
@@ -336,7 +350,9 @@ function RoomStage({ meetingNumber, session, connected, onLeave, onEndForAll }: 
         onTogglePanel={() => setPanelOpen((o) => !o)}
         onError={showNotice}
         mediaDisabled={!connected}
-        leaveControl={<LeaveMenu isHost={isHost} onLeave={onLeave} onEndForAll={endForAll} />}
+        leaveControl={
+          <LeaveMenu isHost={isHost} onLeave={onLeave} onEndForAll={endForAll} onAssignAndLeave={onAssignAndLeave} />
+        }
       />
     </div>
   );
